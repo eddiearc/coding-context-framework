@@ -16,6 +16,8 @@ class CiContractTests(unittest.TestCase):
             self.assertIn(command, workflow)
         self.assertIn("v8.24.2", workflow)
         self.assertNotIn("gitleaks:latest", workflow)
+        self.assertIn("actions/checkout@v7", workflow)
+        self.assertIn("actions/setup-python@v6", workflow)
         self.assertIn("contents: read", workflow)
 
     def test_secret_check_requires_the_pinned_version(self) -> None:
