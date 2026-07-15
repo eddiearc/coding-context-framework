@@ -1,0 +1,19 @@
+schema_version: "1"
+scope: "<synthetic scope>"
+revision: "<revision>"
+environment: "synthetic fixture"
+data_classification: "synthetic"
+commands:
+  - "<exact command>"
+artifacts:
+  - layer: "<validation layer>"
+    case: "<case id>"
+    path: "<repository-relative path>"
+    expected: "<expected result>"
+    actual: "<actual result>"
+    status: "<pass | fail | skip>"
+omitted_layers:
+  - layer: "<layer>"
+    reason: "<reason>"
+residual_risks:
+  - "<risk or none identified>"

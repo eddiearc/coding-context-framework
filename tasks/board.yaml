@@ -1,0 +1,27 @@
+schema_version: 1
+schema_ref: tasks/task.schema.json
+updated_at: '2026-07-14T00:00:00Z'
+status_vocab:
+  - backlog
+  - ready
+  - active
+  - blocked
+  - review
+  - done
+  - archived
+domains:
+  - id: general
+    title: General
+    status: active
+    repos:
+      - id: context-repository
+        name: Context Repository
+        checkout: .
+        base_branch: main
+    context_docs:
+      - path: docs/domains/general.md
+        role: generic placeholder domain
+    notes:
+      - Replace or extend the placeholder repository before starting real implementation.
+    updated_at: '2026-07-14T00:00:00Z'
+tasks: []

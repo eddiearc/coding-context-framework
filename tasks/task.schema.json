@@ -1,0 +1,474 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/coding-context-framework/tasks/task.schema.json",
+  "title": "Coding Context Framework Task Board",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "schema_ref",
+    "updated_at",
+    "status_vocab",
+    "domains",
+    "tasks"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "schema_ref": {
+      "$ref": "#/$defs/repo_path"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status_vocab": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/task_status"
+      }
+    },
+    "domains": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/domain"
+      }
+    },
+    "tasks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/task"
+      }
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "repo_path": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?![A-Za-z]:[\\\\/])(?!\\.\\.(?:/|$))(?!.*\\/\\.\\.(?:\\/|$))(?!.*\\\\)(?![A-Za-z][A-Za-z0-9+.-]*://).+$"
+    },
+    "task_status": {
+      "type": "string",
+      "enum": [
+        "backlog",
+        "ready",
+        "active",
+        "blocked",
+        "review",
+        "done",
+        "archived"
+      ]
+    },
+    "domain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "status",
+        "repos",
+        "context_docs",
+        "notes",
+        "updated_at"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "$ref": "#/$defs/task_status"
+        },
+        "repos": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/repo"
+          }
+        },
+        "context_docs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/context_doc"
+          }
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "repo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "checkout",
+        "base_branch"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "checkout": {
+          "$ref": "#/$defs/repo_path"
+        },
+        "base_branch": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "status",
+        "domain",
+        "requirement_refs",
+        "repos",
+        "context_docs",
+        "plan",
+        "evidence",
+        "notes",
+        "updated_at"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "$ref": "#/$defs/task_status"
+        },
+        "domain": {
+          "$ref": "#/$defs/identifier"
+        },
+        "requirement_refs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "repos": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/identifier"
+          }
+        },
+        "context_docs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/context_doc"
+          }
+        },
+        "sub_tasks": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/identifier"
+          }
+        },
+        "plan": {
+          "$ref": "#/$defs/plan"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidence"
+          }
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "active",
+                  "review"
+                ]
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "plan": {
+                "properties": {
+                  "path": {
+                    "$ref": "#/$defs/repo_path"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "review",
+                  "done"
+                ]
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "evidence": {
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "blocked"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "notes": {
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "plan": {
+                "properties": {
+                  "status": {
+                    "const": "draft_waiting_for_user_alignment"
+                  }
+                },
+                "required": [
+                  "status"
+                ]
+              }
+            },
+            "required": [
+              "plan"
+            ]
+          },
+          "then": {
+            "properties": {
+              "status": {
+                "const": "blocked"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "context_doc": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "role"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/repo_path"
+        },
+        "role": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "status",
+        "execution",
+        "branch",
+        "worktrees",
+        "base_branches"
+      ],
+      "properties": {
+        "path": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/repo_path"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "execution": {
+          "type": "string",
+          "minLength": 1
+        },
+        "branch": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "worktrees": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/repo_path"
+          }
+        },
+        "base_branches": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/identifier"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "path": {
+              "type": "null"
+            },
+            "status": {
+              "not": {
+                "enum": [
+                  "aligned",
+                  "draft_waiting_for_user_alignment"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "path": {
+              "$ref": "#/$defs/repo_path"
+            },
+            "status": {
+              "const": "aligned"
+            },
+            "execution": {
+              "const": "allowed"
+            }
+          }
+        },
+        {
+          "properties": {
+            "path": {
+              "$ref": "#/$defs/repo_path"
+            },
+            "status": {
+              "const": "draft_waiting_for_user_alignment"
+            },
+            "execution": {
+              "const": "blocked"
+            }
+          }
+        }
+      ]
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "path",
+        "status",
+        "summary"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/repo_path"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

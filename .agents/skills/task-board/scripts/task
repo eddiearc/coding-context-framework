@@ -1,0 +1,1198 @@
+#!/usr/bin/env python3
+"""Operate on a repository-local task board."""
+
+from __future__ import annotations
+
+import argparse
+import copy
+import datetime as dt
+import json
+import os
+import re
+import shutil
+import sys
+import tempfile
+from pathlib import Path
+from typing import Any
+
+
+KNOWN_STATUSES = {
+    "backlog",
+    "ready",
+    "active",
+    "blocked",
+    "review",
+    "done",
+    "archived",
+}
+
+
+class TaskError(Exception):
+    """A user-facing task board error."""
+
+
+def load_yaml_module() -> Any:
+    try:
+        import yaml  # type: ignore
+    except ModuleNotFoundError as exc:
+        if os.environ.get("TASK_BOARD_UV_BOOTSTRAPPED") != "1":
+            uv_path = shutil.which("uv")
+            if uv_path:
+                os.environ["TASK_BOARD_UV_BOOTSTRAPPED"] = "1"
+                os.execvp(
+                    uv_path,
+                    [
+                        uv_path,
+                        "run",
+                        "--with",
+                        "PyYAML",
+                        "python3",
+                        str(Path(__file__).resolve()),
+                        *sys.argv[1:],
+                    ],
+                )
+        raise TaskError(
+            "missing dependency: PyYAML is required. Install it with "
+            "`uv run --with PyYAML python3 <task-board-skill-cli> <command>` "
+            "or `python3 -m pip install PyYAML`."
+        ) from exc
+    return yaml
+
+
+def repo_root() -> Path:
+    current = Path(__file__).resolve()
+    for parent in current.parents:
+        if (parent / "AGENTS.md").is_file() and (parent / "tasks" / "board.yaml").is_file():
+            return parent
+    raise TaskError(
+        "cannot locate repository root from task-board skill; expected AGENTS.md "
+        "and tasks/board.yaml in an ancestor directory."
+    )
+
+
+def default_board_path() -> Path:
+    return repo_root() / "tasks" / "board.yaml"
+
+
+def utc_now() -> str:
+    return dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def repo_path_string(path: Path) -> str:
+    root = repo_root().resolve()
+    resolved = path.expanduser().resolve()
+    try:
+        return resolved.relative_to(root).as_posix()
+    except ValueError as exc:
+        raise TaskError(f"path escapes repository root: {path}") from exc
+
+
+def read_board(path: Path) -> tuple[dict[str, Any], Any]:
+    if not path.exists():
+        raise TaskError(f"board file not found: {path}")
+    if not path.is_file():
+        raise TaskError(f"board path is not a file: {path}")
+
+    yaml = load_yaml_module()
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            board = yaml.safe_load(handle)
+    except yaml.YAMLError as exc:
+        raise TaskError(f"invalid YAML in {path}: {exc}") from exc
+    except OSError as exc:
+        raise TaskError(f"cannot read board {path}: {exc}") from exc
+
+    if not isinstance(board, dict):
+        raise TaskError("board root must be a YAML mapping")
+    return board, yaml
+
+
+def write_board(path: Path, board: dict[str, Any], yaml: Any) -> None:
+    rendered = yaml.safe_dump(
+        board,
+        allow_unicode=True,
+        default_flow_style=False,
+        sort_keys=False,
+        indent=2,
+    )
+    old_mode = path.stat().st_mode if path.exists() else 0o644
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent, text=True)
+    tmp_path = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(rendered)
+        os.chmod(tmp_path, old_mode & 0o777)
+        os.replace(tmp_path, path)
+    except OSError as exc:
+        tmp_path.unlink(missing_ok=True)
+        raise TaskError(f"cannot write board {path}: {exc}") from exc
+
+
+def require_mapping(value: Any, path: str, errors: list[str]) -> dict[str, Any] | None:
+    if isinstance(value, dict):
+        return value
+    errors.append(f"{path}: expected mapping, got {type(value).__name__}")
+    return None
+
+
+def require_list(value: Any, path: str, errors: list[str]) -> list[Any]:
+    if isinstance(value, list):
+        return value
+    errors.append(f"{path}: expected list, got {type(value).__name__}")
+    return []
+
+
+def repo_relative_path(raw_path: str) -> Path:
+    return repo_root() / raw_path
+
+
+def resolve_repo_path(raw_path: str, label: str) -> Path:
+    if (
+        Path(raw_path).is_absolute()
+        or re.match(r"^[A-Za-z]:[\\/]", raw_path)
+        or "\\" in raw_path
+        or "://" in raw_path
+        or ".." in Path(raw_path).parts
+    ):
+        raise TaskError(f"{label} must be a repository-relative path: {raw_path}")
+    root = repo_root().resolve()
+    resolved = (root / raw_path).resolve()
+    try:
+        resolved.relative_to(root)
+    except ValueError as exc:
+        raise TaskError(f"{label} escapes repository root: {raw_path}") from exc
+    return resolved
+
+
+def validate_repo_path(
+    raw_path: Any,
+    path: str,
+    errors: list[str],
+    *,
+    allow_null: bool = False,
+) -> None:
+    if raw_path is None and allow_null:
+        return
+    if not isinstance(raw_path, str) or not raw_path.strip():
+        errors.append(f"{path}: required non-empty string")
+        return
+    if "://" in raw_path:
+        errors.append(f"{path}: expected repository-relative path, got URL {raw_path!r}")
+        return
+    try:
+        resolved = resolve_repo_path(raw_path, path)
+    except TaskError as exc:
+        errors.append(str(exc))
+        return
+    if not resolved.exists():
+        errors.append(f"{path}: referenced path does not exist: {raw_path}")
+
+
+def validate_context_docs(value: Any, path: str, errors: list[str]) -> None:
+    docs = require_list(value, path, errors)
+    for index, doc in enumerate(docs):
+        mapping = require_mapping(doc, f"{path}[{index}]", errors)
+        if mapping is None:
+            continue
+        validate_repo_path(mapping.get("path"), f"{path}[{index}].path", errors)
+        if not isinstance(mapping.get("role"), str) or not mapping["role"].strip():
+            errors.append(f"{path}[{index}].role: required non-empty string")
+
+
+def validate_evidence(value: Any, path: str, errors: list[str]) -> list[Any]:
+    evidence = require_list(value, path, errors)
+    for index, item in enumerate(evidence):
+        mapping = require_mapping(item, f"{path}[{index}]", errors)
+        if mapping is None:
+            continue
+        if not isinstance(mapping.get("type"), str) or not mapping["type"].strip():
+            errors.append(f"{path}[{index}].type: required non-empty string")
+        validate_repo_path(mapping.get("path"), f"{path}[{index}].path", errors, allow_null=True)
+        if not isinstance(mapping.get("status"), str) or not mapping["status"].strip():
+            errors.append(f"{path}[{index}].status: required non-empty string")
+        if not isinstance(mapping.get("summary"), str) or not mapping["summary"].strip():
+            errors.append(f"{path}[{index}].summary: required non-empty string")
+    return evidence
+
+
+def validate_plan_paths(plan: dict[str, Any], path: str, task_status: Any, errors: list[str]) -> None:
+    if "path" not in plan:
+        errors.append(f"{path}.path: required key, use null if absent")
+    else:
+        validate_repo_path(plan.get("path"), f"{path}.path", errors, allow_null=True)
+    worktrees = require_list(plan.get("worktrees"), f"{path}.worktrees", errors)
+    for index, worktree in enumerate(worktrees):
+        validate_repo_path(worktree, f"{path}.worktrees[{index}]", errors)
+    require_mapping(plan.get("base_branches"), f"{path}.base_branches", errors)
+    if task_status in {"active", "review"} and not plan.get("path"):
+        errors.append(f"{path}.path: {task_status} task must reference a plan")
+
+
+def validate_board(board: dict[str, Any]) -> tuple[list[dict[str, Any]], set[str], list[str]]:
+    errors: list[str] = []
+
+    if not isinstance(board.get("schema_version"), int) or board["schema_version"] < 1:
+        errors.append("schema_version: required integer >= 1")
+    if not isinstance(board.get("schema_ref"), str) or not board["schema_ref"].strip():
+        errors.append("schema_ref: required non-empty string")
+    if not isinstance(board.get("updated_at"), str) or not board["updated_at"].strip():
+        errors.append("updated_at: required non-empty string")
+
+    status_vocab_raw = require_list(board.get("status_vocab"), "status_vocab", errors)
+    status_vocab = {item for item in status_vocab_raw if isinstance(item, str)}
+    if len(status_vocab) != len(status_vocab_raw):
+        errors.append("status_vocab: every status must be a string")
+    unknown_vocab = status_vocab - KNOWN_STATUSES
+    if unknown_vocab:
+        errors.append(f"status_vocab: unknown canonical statuses: {', '.join(sorted(unknown_vocab))}")
+    if len(status_vocab) != len(status_vocab_raw):
+        errors.append("status_vocab: duplicate status values are not allowed")
+
+    domain_ids: set[str] = set()
+    for index, domain in enumerate(require_list(board.get("domains"), "domains", errors)):
+        mapping = require_mapping(domain, f"domains[{index}]", errors)
+        if mapping is None:
+            continue
+        domain_id = mapping.get("id")
+        if not isinstance(domain_id, str) or not domain_id.strip():
+            errors.append(f"domains[{index}].id: required non-empty string")
+        elif domain_id in domain_ids:
+            errors.append(f"domains[{index}].id: duplicate domain id {domain_id!r}")
+        else:
+            domain_ids.add(domain_id)
+        if mapping.get("status") not in status_vocab:
+            errors.append(f"domains[{index}].status: unknown status {mapping.get('status')!r}")
+        validate_context_docs(mapping.get("context_docs"), f"domains[{index}].context_docs", errors)
+
+    tasks: list[dict[str, Any]] = []
+    task_ids: set[str] = set()
+    for index, task in enumerate(require_list(board.get("tasks"), "tasks", errors)):
+        mapping = require_mapping(task, f"tasks[{index}]", errors)
+        if mapping is None:
+            continue
+        tasks.append(mapping)
+
+        task_id = mapping.get("id")
+        if not isinstance(task_id, str) or not task_id.strip():
+            errors.append(f"tasks[{index}].id: required non-empty string")
+        elif task_id in task_ids:
+            errors.append(f"tasks[{index}].id: duplicate task id {task_id!r}")
+        else:
+            task_ids.add(task_id)
+
+        if not isinstance(mapping.get("title"), str) or not mapping["title"].strip():
+            errors.append(f"tasks[{index}].title: required non-empty string")
+        if mapping.get("status") not in status_vocab:
+            errors.append(f"tasks[{index}].status: unknown status {mapping.get('status')!r}")
+        if mapping.get("domain") not in domain_ids:
+            errors.append(f"tasks[{index}].domain: unknown domain {mapping.get('domain')!r}")
+        requirement_refs = require_list(
+            mapping.get("requirement_refs"), f"tasks[{index}].requirement_refs", errors
+        )
+        seen_requirement_refs: set[str] = set()
+        for ref_index, requirement_ref in enumerate(requirement_refs):
+            ref_path = f"tasks[{index}].requirement_refs[{ref_index}]"
+            if not isinstance(requirement_ref, str) or not requirement_ref.strip():
+                errors.append(f"{ref_path}: required non-empty string")
+            elif requirement_ref in seen_requirement_refs:
+                errors.append(f"{ref_path}: duplicate requirement reference {requirement_ref!r}")
+            else:
+                seen_requirement_refs.add(requirement_ref)
+        require_list(mapping.get("repos"), f"tasks[{index}].repos", errors)
+        validate_context_docs(mapping.get("context_docs"), f"tasks[{index}].context_docs", errors)
+        if require_mapping(mapping.get("plan"), f"tasks[{index}].plan", errors) is not None:
+            plan = mapping["plan"]
+            validate_plan_paths(plan, f"tasks[{index}].plan", mapping.get("status"), errors)
+        evidence = validate_evidence(mapping.get("evidence"), f"tasks[{index}].evidence", errors)
+        if mapping.get("status") in {"done", "review"} and not evidence:
+            errors.append(f"tasks[{index}].evidence: {mapping.get('status')} task must include at least one evidence entry")
+        notes = require_list(mapping.get("notes"), f"tasks[{index}].notes", errors)
+        if mapping.get("status") == "blocked" and not notes:
+            errors.append(f"tasks[{index}].notes: blocked task must include blocker notes")
+        if not isinstance(mapping.get("updated_at"), str) or not mapping["updated_at"].strip():
+            errors.append(f"tasks[{index}].updated_at: required non-empty string")
+
+    parent_by_child: dict[str, str] = {}
+    graph: dict[str, list[str]] = {}
+    task_index_by_id = {task.get("id"): index for index, task in enumerate(tasks)}
+    for index, task in enumerate(tasks):
+        parent_id = task.get("id")
+        raw_children = task.get("sub_tasks", [])
+        children = require_list(raw_children, f"tasks[{index}].sub_tasks", errors)
+        graph[parent_id] = []
+        seen_children: set[str] = set()
+        for child_index, child_id in enumerate(children):
+            child_path = f"tasks[{index}].sub_tasks[{child_index}]"
+            if not isinstance(child_id, str) or not child_id.strip():
+                errors.append(f"{child_path}: required non-empty task id")
+                continue
+            if child_id in seen_children:
+                errors.append(f"{child_path}: duplicate sub-task {child_id!r}")
+                continue
+            seen_children.add(child_id)
+            if child_id == parent_id:
+                errors.append(f"{child_path}: task cannot reference itself")
+                continue
+            if child_id not in task_ids:
+                errors.append(f"{child_path}: unknown sub-task {child_id!r}")
+                continue
+            existing_parent = parent_by_child.get(child_id)
+            if existing_parent is not None and existing_parent != parent_id:
+                errors.append(
+                    f"{child_path}: sub-task {child_id!r} has multiple parents: "
+                    f"{existing_parent!r} and {parent_id!r}"
+                )
+                continue
+            parent_by_child[child_id] = parent_id
+            graph[parent_id].append(child_id)
+
+    visiting: set[str] = set()
+    visited: set[str] = set()
+
+    def visit(task_id: str, trail: list[str]) -> None:
+        if task_id in visiting:
+            cycle_start = trail.index(task_id) if task_id in trail else 0
+            cycle = trail[cycle_start:] + [task_id]
+            index = task_index_by_id.get(task_id, 0)
+            errors.append(f"tasks[{index}].sub_tasks: cycle detected: {' -> '.join(cycle)}")
+            return
+        if task_id in visited:
+            return
+        visiting.add(task_id)
+        for child_id in graph.get(task_id, []):
+            visit(child_id, [*trail, task_id])
+        visiting.remove(task_id)
+        visited.add(task_id)
+
+    for task_id in graph:
+        visit(task_id, [])
+
+    return tasks, status_vocab, errors
+
+
+def checked_board(path: Path) -> tuple[dict[str, Any], Any, list[dict[str, Any]], set[str]]:
+    board, yaml = read_board(path)
+    tasks, statuses, errors = validate_board(board)
+    if errors:
+        raise TaskError("board validation failed:\n" + "\n".join(f"- {error}" for error in errors))
+    return board, yaml, tasks, statuses
+
+
+def find_task(tasks: list[dict[str, Any]], task_id: str) -> dict[str, Any]:
+    for task in tasks:
+        if task.get("id") == task_id:
+            return task
+    available = ", ".join(task["id"] for task in tasks[:20])
+    raise TaskError(f"task not found: {task_id}. Available ids: {available}")
+
+
+def parse_plan_metadata(plan_path: Path) -> dict[str, str]:
+    try:
+        text = plan_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise TaskError(f"cannot read plan {plan_path}: {exc}") from exc
+
+    title_match = re.search(r"^#\s+(.+?)\s*$", text, re.MULTILINE)
+    title = title_match.group(1).strip() if title_match else plan_path.stem.replace("-", " ")
+
+    plan_status = "unknown"
+    execution = "unknown"
+    status_block = re.search(r"^## Plan Status\s*(.*?)(?=^## |\Z)", text, re.MULTILINE | re.DOTALL)
+    if status_block:
+        status_match = re.search(r"^Status:\s*(.+?)\s*$", status_block.group(1), re.MULTILINE)
+        execution_match = re.search(r"^Execution:\s*(.+?)\s*$", status_block.group(1), re.MULTILINE)
+        if status_match:
+            plan_status = status_match.group(1).strip()
+        if execution_match:
+            execution = execution_match.group(1).strip()
+
+    return {
+        "title": title,
+        "plan_status": plan_status,
+        "execution": execution,
+    }
+
+
+def normalize_plan_status(raw_status: str) -> str:
+    lowered = raw_status.strip().lower()
+    if lowered == "aligned":
+        return "aligned"
+    if "draft" in lowered and "waiting" in lowered:
+        return "draft_waiting_for_user_alignment"
+    return re.sub(r"[^a-z0-9]+", "_", lowered).strip("_") or "unknown"
+
+
+def normalize_execution(raw_execution: str, plan_status: str) -> str:
+    lowered = raw_execution.strip().lower()
+    if lowered.startswith("allowed"):
+        return "allowed"
+    if lowered.startswith("blocked"):
+        return "blocked"
+    if plan_status == "aligned":
+        return "allowed"
+    if "draft" in plan_status:
+        return "blocked"
+    return re.sub(r"[^a-z0-9]+", "_", lowered).strip("_") or "unknown"
+
+
+def parse_key_value(raw: str, label: str) -> tuple[str, str]:
+    if "=" not in raw:
+        raise TaskError(f"{label} must use key=value syntax: {raw!r}")
+    key, value = raw.split("=", 1)
+    key = key.strip()
+    value = value.strip()
+    if not key or not value:
+        raise TaskError(f"{label} must include non-empty key and value: {raw!r}")
+    return key, value
+
+
+def validate_git_branch(raw: str, label: str) -> str:
+    """Validate the useful subset of Git ref rules used by task routing metadata."""
+    branch = raw.strip()
+    invalid_chars = set(" ~^:?*[\\")
+    invalid_component = any(
+        not component
+        or component.startswith(".")
+        or component.endswith(".")
+        or component.endswith(".lock")
+        for component in branch.split("/")
+    )
+    if (
+        not branch
+        or branch.startswith("-")
+        or branch.endswith("/")
+        or branch == "@"
+        or ".." in branch
+        or "@{" in branch
+        or "//" in branch
+        or any(char in invalid_chars or ord(char) < 32 or ord(char) == 127 for char in branch)
+        or invalid_component
+    ):
+        raise TaskError(f"{label} is not a valid Git branch/ref name: {raw!r}")
+    return branch
+
+
+def existing_repo_directory(raw_path: str, label: str) -> str:
+    resolved = resolve_repo_path(raw_path, label)
+    if not resolved.exists():
+        raise TaskError(f"{label} not found: {raw_path}")
+    if not resolved.is_dir():
+        raise TaskError(f"{label} must be a directory: {raw_path}")
+    return repo_path_string(resolved)
+
+
+def validated_plan_metadata(plan_path: Path) -> tuple[str, dict[str, str]]:
+    resolved = plan_path.expanduser().resolve()
+    if not resolved.exists():
+        raise TaskError(f"plan file not found: {resolved}")
+    if not resolved.is_file():
+        raise TaskError(f"plan path is not a file: {resolved}")
+    plan_rel = repo_path_string(resolved)
+    metadata = parse_plan_metadata(resolved)
+    plan_status = normalize_plan_status(metadata["plan_status"])
+    execution = normalize_execution(metadata["execution"], plan_status)
+    supported_statuses = {"aligned", "draft_waiting_for_user_alignment"}
+    if plan_status not in supported_statuses:
+        raise TaskError(
+            "plan `Status:` must be `Aligned` or `Draft - waiting for user alignment`; "
+            f"got {metadata['plan_status']!r}"
+        )
+    expected_execution = "allowed" if plan_status == "aligned" else "blocked"
+    raw_execution = metadata["execution"].strip().lower()
+    if not raw_execution.startswith(expected_execution) or execution != expected_execution:
+        raise TaskError(
+            f"plan `Execution:` must be {expected_execution} for plan status {plan_status}; "
+            f"got {metadata['execution']!r}"
+        )
+    return plan_rel, {
+        **metadata,
+        "plan_status": plan_status,
+        "execution": execution,
+    }
+
+
+def replace_registered_plan_context_path(task: dict[str, Any], old_path: str, new_path: str) -> None:
+    docs = task.setdefault("context_docs", [])
+    replaced = False
+    for doc in docs:
+        if (
+            isinstance(doc, dict)
+            and doc.get("path") == old_path
+            and "plan" in str(doc.get("role", "")).lower()
+        ):
+            doc["path"] = new_path
+            replaced = True
+    if not replaced and not any(
+        isinstance(doc, dict) and doc.get("path") == new_path for doc in docs
+    ):
+        docs.append({"path": new_path, "role": "registered task plan"})
+    unique_docs: list[Any] = []
+    for doc in docs:
+        if doc not in unique_docs:
+            unique_docs.append(doc)
+    docs[:] = unique_docs
+
+
+def task_summary(task: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": task.get("id"),
+        "status": task.get("status"),
+        "domain": task.get("domain"),
+        "title": task.get("title"),
+        "plan": (task.get("plan") or {}).get("path"),
+        "sub_tasks": list(task.get("sub_tasks") or []),
+    }
+
+
+def tree_rows(tasks: list[dict[str, Any]]) -> list[tuple[dict[str, Any], int]]:
+    by_id = {task.get("id"): task for task in tasks}
+    child_ids = {
+        child_id
+        for task in tasks
+        for child_id in task.get("sub_tasks", [])
+        if child_id in by_id
+    }
+    rows: list[tuple[dict[str, Any], int]] = []
+    seen: set[str] = set()
+
+    def append_task(task: dict[str, Any], depth: int) -> None:
+        task_id = str(task.get("id", ""))
+        if task_id in seen:
+            return
+        seen.add(task_id)
+        rows.append((task, depth))
+        for child_id in task.get("sub_tasks", []):
+            child = by_id.get(child_id)
+            if child is not None:
+                append_task(child, depth + 1)
+
+    for task in tasks:
+        if task.get("id") not in child_ids:
+            append_task(task, 0)
+    for task in tasks:
+        append_task(task, 0)
+    return rows
+
+
+def print_table(
+    tasks: list[dict[str, Any]],
+    *,
+    tree: bool = False,
+    hierarchy_tasks: list[dict[str, Any]] | None = None,
+) -> None:
+    selected_ids = {task.get("id") for task in tasks}
+    source_rows = (
+        tree_rows(hierarchy_tasks or tasks)
+        if tree
+        else [(task, 0) for task in tasks]
+    )
+    rows = []
+    for task, depth in source_rows:
+        if task.get("id") not in selected_ids:
+            continue
+        task_id = str(task.get("id", ""))
+        if depth:
+            task_id = f"{'  ' * (depth - 1)}↳ {task_id}"
+        rows.append(
+            (
+                task_id,
+                str(task.get("status", "")),
+                str(task.get("domain", "")),
+                str(task.get("title", "")),
+            )
+        )
+    headers = ("ID", "STATUS", "DOMAIN", "TITLE")
+    widths = [
+        max((len(headers[i]), *(len(row[i]) for row in rows)))
+        for i in range(len(headers))
+    ]
+    print("  ".join(headers[i].ljust(widths[i]) for i in range(len(headers))))
+    print("  ".join("-" * width for width in widths))
+    for row in rows:
+        print("  ".join(row[i].ljust(widths[i]) for i in range(len(row))))
+
+
+def output_data(data: Any, fmt: str, yaml: Any) -> None:
+    if fmt == "json":
+        print(json.dumps(data, ensure_ascii=False, indent=2))
+        return
+    print(yaml.safe_dump(data, allow_unicode=True, default_flow_style=False, sort_keys=False).rstrip())
+
+
+def cmd_validate(args: argparse.Namespace) -> int:
+    _board, _yaml, tasks, statuses = checked_board(args.board)
+    print(f"valid board: {args.board} ({len(tasks)} task(s); statuses: {', '.join(sorted(statuses))})")
+    return 0
+
+
+def cmd_list(args: argparse.Namespace) -> int:
+    _board, yaml, tasks, _statuses = checked_board(args.board)
+    hierarchy_tasks = tasks
+    if args.status:
+        tasks = [task for task in tasks if task.get("status") == args.status]
+    if args.format == "table":
+        print_table(tasks, tree=args.tree, hierarchy_tasks=hierarchy_tasks)
+    else:
+        output_data([task_summary(task) for task in tasks], args.format, yaml)
+    return 0
+
+
+def cmd_show(args: argparse.Namespace) -> int:
+    _board, yaml, tasks, _statuses = checked_board(args.board)
+    output_data(find_task(tasks, args.task_id), args.format, yaml)
+    return 0
+
+
+def cmd_set_status(args: argparse.Namespace) -> int:
+    board, yaml, tasks, statuses = checked_board(args.board)
+    if args.status not in statuses:
+        raise TaskError(f"unknown status {args.status!r}; expected one of {', '.join(sorted(statuses))}")
+    task = find_task(tasks, args.task_id)
+    old_status = task.get("status")
+    if old_status == args.status:
+        print(f"unchanged: {task['id']} is already {args.status}")
+        return 0
+    now = utc_now()
+    task["status"] = args.status
+    task["updated_at"] = now
+    board["updated_at"] = now
+    _tasks, _statuses, errors = validate_board(board)
+    if errors:
+        task["status"] = old_status
+        raise TaskError("status change would make board invalid:\n" + "\n".join(f"- {error}" for error in errors))
+    write_board(args.board, board, yaml)
+    print(f"updated: {task['id']} {old_status} -> {args.status}")
+    return 0
+
+
+def cmd_set_plan_metadata(args: argparse.Namespace) -> int:
+    board, yaml, tasks, statuses = checked_board(args.board)
+    task = find_task(tasks, args.task_id)
+    plan = task.get("plan")
+    if not isinstance(plan, dict) or not plan.get("path"):
+        raise TaskError(
+            f"task does not have a registered plan: {args.task_id}; use register-plan first"
+        )
+
+    plan_rel, metadata = validated_plan_metadata(args.plan)
+    next_task_status = args.task_status or task.get("status")
+    if next_task_status not in statuses:
+        raise TaskError(
+            f"unknown status {next_task_status!r}; expected one of {', '.join(sorted(statuses))}"
+        )
+    if metadata["plan_status"] == "draft_waiting_for_user_alignment" and next_task_status != "blocked":
+        raise TaskError(
+            "a draft plan requires task status `blocked`; pass `--task-status blocked` "
+            "or align the plan first"
+        )
+
+    next_branch = plan.get("branch")
+    if args.clear_branch:
+        next_branch = None
+    elif args.branch is not None:
+        next_branch = validate_git_branch(args.branch, "--branch")
+
+    next_worktrees = list(plan.get("worktrees") or [])
+    if args.clear_worktrees:
+        next_worktrees = []
+    elif args.worktree is not None:
+        next_worktrees = []
+        for raw_path in args.worktree:
+            normalized = existing_repo_directory(raw_path, "--worktree")
+            if normalized in next_worktrees:
+                raise TaskError(f"--worktree must not contain duplicates: {raw_path!r}")
+            next_worktrees.append(normalized)
+
+    # Additive repo registration, mirroring register-plan: a task package may grow to
+    # span more repositories after its plan is already registered.
+    if args.repo:
+        existing_repos = task.setdefault("repos", [])
+        for repo in args.repo:
+            if repo not in existing_repos:
+                existing_repos.append(repo)
+
+    next_base_branches = dict(plan.get("base_branches") or {})
+    if args.clear_base_branches:
+        next_base_branches = {}
+    elif args.base_branch is not None:
+        next_base_branches = {}
+        task_repos = set(task.get("repos") or [])
+        for raw in args.base_branch:
+            repo_id, branch = parse_key_value(raw, "--base-branch")
+            if repo_id not in task_repos:
+                expected = ", ".join(sorted(task_repos)) or "<none>"
+                raise TaskError(
+                    f"--base-branch repo {repo_id!r} is not listed in task.repos; expected one of {expected}"
+                )
+            if repo_id in next_base_branches:
+                raise TaskError(f"--base-branch must not repeat repo {repo_id!r}")
+            next_base_branches[repo_id] = validate_git_branch(
+                branch, f"--base-branch {repo_id}"
+            )
+
+    old_task = copy.deepcopy(task)
+    old_path = str(plan["path"])
+    plan.update(
+        {
+            "path": plan_rel,
+            "status": metadata["plan_status"],
+            "execution": metadata["execution"],
+            "branch": next_branch,
+            "worktrees": next_worktrees,
+            "base_branches": next_base_branches,
+        }
+    )
+    task["status"] = next_task_status
+    replace_registered_plan_context_path(task, old_path, plan_rel)
+
+    if task == old_task:
+        print(f"unchanged: {task['id']} plan metadata already matches {plan_rel}")
+        return 0
+
+    now = utc_now()
+    task["updated_at"] = now
+    board["updated_at"] = now
+    _tasks, _statuses, errors = validate_board(board)
+    if errors:
+        raise TaskError(
+            "plan metadata change would make board invalid:\n"
+            + "\n".join(f"- {error}" for error in errors)
+        )
+    write_board(args.board, board, yaml)
+    print(
+        f"updated: {task['id']} plan={plan_rel} status={metadata['plan_status']} "
+        f"branch={next_branch or 'null'} worktrees={len(next_worktrees)} "
+        f"base_branches={len(next_base_branches)}"
+    )
+    return 0
+
+
+def build_plan_stub(args: argparse.Namespace) -> dict[str, Any]:
+    base_branches: dict[str, str] = {}
+    for raw in args.base_branch or []:
+        repo_id, branch = parse_key_value(raw, "--base-branch")
+        base_branches[repo_id] = branch
+    return {
+        "path": None,
+        "status": args.plan_status,
+        "execution": args.execution,
+        "branch": args.branch,
+        "worktrees": args.worktree or [],
+        "base_branches": base_branches,
+    }
+
+
+def build_context_docs(raw_docs: list[str] | None) -> list[dict[str, str]]:
+    context_docs = []
+    for raw in raw_docs or []:
+        path, role = parse_key_value(raw, "--context-doc")
+        context_docs.append({"path": path, "role": role})
+    return context_docs
+
+
+def unique_values(values: list[str] | None) -> list[str]:
+    return list(dict.fromkeys(values or []))
+
+
+def cmd_add_task(args: argparse.Namespace) -> int:
+    board, yaml, tasks, statuses = checked_board(args.board)
+    if any(task.get("id") == args.task_id for task in tasks):
+        raise TaskError(f"task already exists: {args.task_id}")
+    if args.status not in statuses:
+        raise TaskError(f"unknown status {args.status!r}; expected one of {', '.join(sorted(statuses))}")
+    if args.status in {"active", "review", "done", "archived"}:
+        raise TaskError("add-task is for intake/backlog tasks only; use register-plan plus status transitions for execution/review/done")
+    if args.status == "blocked" and not args.note:
+        args.note = ["Task captured before execution planning; register a plan before implementation."]
+
+    now = utc_now()
+    task = {
+        "id": args.task_id,
+        "title": args.title,
+        "status": args.status,
+        "domain": args.domain,
+        "requirement_refs": unique_values(args.requirement_ref),
+        "repos": unique_values(args.repo),
+        "context_docs": build_context_docs(args.context_doc),
+        "plan": build_plan_stub(args),
+        "evidence": [],
+        "notes": args.note or [],
+        "updated_at": now,
+    }
+    board.setdefault("tasks", []).append(task)
+    board["updated_at"] = now
+    _tasks, _statuses, errors = validate_board(board)
+    if errors:
+        raise TaskError("new task would make board invalid:\n" + "\n".join(f"- {error}" for error in errors))
+    write_board(args.board, board, yaml)
+    checked_board(args.board)
+    print(f"added: {args.task_id} ({args.status})")
+    return 0
+
+
+def cmd_add_evidence(args: argparse.Namespace) -> int:
+    board, yaml, tasks, _statuses = checked_board(args.board)
+    task = find_task(tasks, args.task_id)
+    path_value: str | None = None
+    if args.path is not None:
+        resolved = resolve_repo_path(args.path, "evidence path")
+        if not resolved.exists():
+            raise TaskError(f"evidence path not found: {args.path}")
+        path_value = repo_path_string(resolved)
+    entry = {
+        "type": args.type,
+        "path": path_value,
+        "status": args.status,
+        "summary": args.summary,
+    }
+    evidence = task.setdefault("evidence", [])
+    if entry in evidence:
+        print(f"unchanged: {task['id']} already has this evidence entry")
+        return 0
+    evidence.append(entry)
+    now = utc_now()
+    task["updated_at"] = now
+    board["updated_at"] = now
+    write_board(args.board, board, yaml)
+    print(f"updated: {task['id']} evidence += {args.type} ({path_value or 'no path'})")
+    return 0
+
+
+def cmd_add_note(args: argparse.Namespace) -> int:
+    board, yaml, tasks, _statuses = checked_board(args.board)
+    task = find_task(tasks, args.task_id)
+    notes = task.setdefault("notes", [])
+    if args.note in notes:
+        print(f"unchanged: {task['id']} already has this note")
+        return 0
+    notes.append(args.note)
+    now = utc_now()
+    task["updated_at"] = now
+    board["updated_at"] = now
+    write_board(args.board, board, yaml)
+    print(f"updated: {task['id']} notes += 1")
+    return 0
+
+
+def cmd_link_sub_task(args: argparse.Namespace) -> int:
+    board, yaml, tasks, _statuses = checked_board(args.board)
+    parent = find_task(tasks, args.parent_task_id)
+    child = find_task(tasks, args.child_task_id)
+    if parent is child:
+        raise TaskError("a task cannot be its own sub-task")
+    children = parent.setdefault("sub_tasks", [])
+    if child["id"] in children:
+        print(f"unchanged: {parent['id']} -> {child['id']}")
+        return 0
+    for task in tasks:
+        if task is not parent and child["id"] in task.get("sub_tasks", []):
+            raise TaskError(
+                f"sub-task {child['id']} already belongs to parent {task['id']}"
+            )
+    children.append(child["id"])
+    now = utc_now()
+    parent["updated_at"] = now
+    board["updated_at"] = now
+    _tasks, _statuses, errors = validate_board(board)
+    if errors:
+        raise TaskError(
+            "sub-task link would make board invalid:\n"
+            + "\n".join(f"- {error}" for error in errors)
+        )
+    write_board(args.board, board, yaml)
+    checked_board(args.board)
+    print(f"linked: {parent['id']} -> {child['id']}")
+    return 0
+
+
+def cmd_unlink_sub_task(args: argparse.Namespace) -> int:
+    board, yaml, tasks, _statuses = checked_board(args.board)
+    parent = find_task(tasks, args.parent_task_id)
+    child = find_task(tasks, args.child_task_id)
+    children = parent.setdefault("sub_tasks", [])
+    if child["id"] not in children:
+        print(f"unchanged: {parent['id']} -/-> {child['id']}")
+        return 0
+    children.remove(child["id"])
+    now = utc_now()
+    parent["updated_at"] = now
+    board["updated_at"] = now
+    write_board(args.board, board, yaml)
+    checked_board(args.board)
+    print(f"unlinked: {parent['id']} -/-> {child['id']}")
+    return 0
+
+
+def cmd_register_plan(args: argparse.Namespace) -> int:
+    board, yaml, tasks, statuses = checked_board(args.board)
+    existing_task = next((task for task in tasks if task.get("id") == args.task_id), None)
+    if existing_task is not None and existing_task.get("plan", {}).get("path"):
+        raise TaskError(f"task already has a plan: {args.task_id}")
+
+    plan_rel, metadata = validated_plan_metadata(args.plan)
+    plan_status = metadata["plan_status"]
+    execution = metadata["execution"]
+
+    task_status = args.status
+    if task_status is None:
+        task_status = "ready" if plan_status == "aligned" else "blocked"
+    if task_status not in statuses:
+        raise TaskError(f"unknown status {task_status!r}; expected one of {', '.join(sorted(statuses))}")
+    if task_status == "done":
+        raise TaskError("register-plan cannot create a done task; create it as ready/review and add evidence later")
+    if plan_status == "draft_waiting_for_user_alignment" and task_status != "blocked":
+        raise TaskError("a draft plan requires task status `blocked`")
+
+    if task_status == "blocked" and not args.note:
+        args.note = ["Plan is not executable yet; resolve its blockers before implementation."]
+
+    base_branches: dict[str, str] = {}
+    for raw in args.base_branch or []:
+        repo_id, branch = parse_key_value(raw, "--base-branch")
+        base_branches[repo_id] = branch
+
+    context_docs = [
+        {
+            "path": plan_rel,
+            "role": "registered task plan",
+        }
+    ]
+    for raw in args.context_doc or []:
+        path, role = parse_key_value(raw, "--context-doc")
+        context_docs.append({"path": path, "role": role})
+
+    now = utc_now()
+    if existing_task is None:
+        task = {
+            "id": args.task_id,
+            "title": args.title or metadata["title"],
+            "status": task_status,
+            "domain": args.domain,
+            "requirement_refs": unique_values(args.requirement_ref),
+            "repos": unique_values(args.repo),
+            "context_docs": context_docs,
+            "plan": {
+                "path": plan_rel,
+                "status": plan_status,
+                "execution": execution,
+                "branch": args.branch,
+                "worktrees": args.worktree or [],
+                "base_branches": base_branches,
+            },
+            "evidence": [],
+            "notes": args.note or [],
+            "updated_at": now,
+        }
+        board.setdefault("tasks", []).append(task)
+        action = "registered"
+    else:
+        task = existing_task
+        task["title"] = args.title or task.get("title") or metadata["title"]
+        task["status"] = task_status
+        task["domain"] = args.domain
+        if args.requirement_ref:
+            existing_refs = task.setdefault("requirement_refs", [])
+            for requirement_ref in args.requirement_ref:
+                if requirement_ref not in existing_refs:
+                    existing_refs.append(requirement_ref)
+        existing_repos = task.setdefault("repos", [])
+        for repo in args.repo:
+            if repo not in existing_repos:
+                existing_repos.append(repo)
+        existing_docs = task.setdefault("context_docs", [])
+        for doc in context_docs:
+            if doc not in existing_docs:
+                existing_docs.append(doc)
+        task["plan"] = {
+            "path": plan_rel,
+            "status": plan_status,
+            "execution": execution,
+            "branch": args.branch,
+            "worktrees": args.worktree or [],
+            "base_branches": base_branches,
+        }
+        existing_notes = task.setdefault("notes", [])
+        for note in args.note or []:
+            if note not in existing_notes:
+                existing_notes.append(note)
+        task.setdefault("evidence", [])
+        task["updated_at"] = now
+        action = "linked"
+
+    board["updated_at"] = now
+    _tasks, _statuses, errors = validate_board(board)
+    if errors:
+        raise TaskError("new task would make board invalid:\n" + "\n".join(f"- {error}" for error in errors))
+    write_board(args.board, board, yaml)
+    checked_board(args.board)
+    print(f"{action}: {args.task_id} -> {plan_rel} ({task_status})")
+    return 0
+
+
+def add_board_arg(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--board",
+        type=lambda value: Path(value).expanduser().resolve(),
+        default=default_board_path(),
+        help="Task board path. Defaults to tasks/board.yaml.",
+    )
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Validate and update tasks/board.yaml.")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    validate = subparsers.add_parser("validate", help="Validate the task board.")
+    add_board_arg(validate)
+    validate.set_defaults(func=cmd_validate)
+
+    list_parser = subparsers.add_parser("list", help="List tasks.")
+    add_board_arg(list_parser)
+    list_parser.add_argument("--status", help="Only show tasks with this status.")
+    list_parser.add_argument("--format", choices=("table", "yaml", "json"), default="table")
+    list_parser.add_argument(
+        "--tree",
+        action="store_true",
+        help="Display parent tasks followed by indented sub-tasks.",
+    )
+    list_parser.set_defaults(func=cmd_list)
+
+    show = subparsers.add_parser("show", help="Show a task by id.")
+    add_board_arg(show)
+    show.add_argument("task_id")
+    show.add_argument("--format", choices=("yaml", "json"), default="yaml")
+    show.set_defaults(func=cmd_show)
+
+    set_status = subparsers.add_parser("set-status", help="Set a task status.")
+    add_board_arg(set_status)
+    set_status.add_argument("task_id")
+    set_status.add_argument("status")
+    set_status.set_defaults(func=cmd_set_status)
+
+    set_plan_metadata = subparsers.add_parser(
+        "set-plan-metadata",
+        help="Refresh an existing plan link/status and atomically update its execution routing.",
+    )
+    add_board_arg(set_plan_metadata)
+    set_plan_metadata.add_argument("task_id")
+    set_plan_metadata.add_argument(
+        "plan",
+        type=lambda value: Path(value).expanduser().resolve(),
+        help="Existing repository-local plan file; Status and Execution are read from it.",
+    )
+    set_plan_metadata.add_argument(
+        "--task-status",
+        choices=sorted(KNOWN_STATUSES),
+        help="Optionally update the board task status in the same atomic write.",
+    )
+    set_plan_metadata.add_argument(
+        "--repo",
+        action="append",
+        help="Add a repository id to task.repos (additive, deduplicated). Repeat as needed.",
+    )
+    branch_group = set_plan_metadata.add_mutually_exclusive_group()
+    branch_group.add_argument("--branch", help="Replace plan.branch with this Git branch.")
+    branch_group.add_argument(
+        "--clear-branch", action="store_true", help="Set plan.branch to null."
+    )
+    worktree_group = set_plan_metadata.add_mutually_exclusive_group()
+    worktree_group.add_argument(
+        "--worktree",
+        action="append",
+        help="Replace plan.worktrees with these existing repo-local directories. Repeat as needed.",
+    )
+    worktree_group.add_argument(
+        "--clear-worktrees", action="store_true", help="Replace plan.worktrees with an empty list."
+    )
+    base_group = set_plan_metadata.add_mutually_exclusive_group()
+    base_group.add_argument(
+        "--base-branch",
+        action="append",
+        help="Replace plan.base_branches using repo=branch entries. Repeat as needed.",
+    )
+    base_group.add_argument(
+        "--clear-base-branches",
+        action="store_true",
+        help="Replace plan.base_branches with an empty mapping.",
+    )
+    set_plan_metadata.set_defaults(func=cmd_set_plan_metadata)
+
+    add_task = subparsers.add_parser("add-task", help="Capture a backlog/blocked task before an execution plan exists.")
+    add_board_arg(add_task)
+    add_task.add_argument("--id", dest="task_id", required=True, help="Canonical task id.")
+    add_task.add_argument("--title", required=True, help="Task title.")
+    add_task.add_argument("--domain", required=True, help="Existing task domain id.")
+    add_task.add_argument("--repo", action="append", help="Likely target repo id. Repeat for multi-repo tasks.")
+    add_task.add_argument("--requirement-ref", action="append", help="Requirement reference. Repeat as needed.")
+    add_task.add_argument("--status", choices=("backlog", "blocked"), default="backlog", help="Initial intake status. Defaults to backlog.")
+    add_task.add_argument("--context-doc", action="append", help="Context doc in path=role form. Repeat as needed.")
+    add_task.add_argument("--note", action="append", help="Initial note. Repeat as needed.")
+    add_task.add_argument("--plan-status", default="not_started", help="Plan status label stored while no plan file exists.")
+    add_task.add_argument("--execution", default="blocked_until_plan", help="Execution label stored while no plan file exists.")
+    add_task.add_argument("--branch", help="Planned branch shared by target repos when applicable.")
+    add_task.add_argument("--worktree", action="append", help="Planned worktree path. Repeat as needed.")
+    add_task.add_argument("--base-branch", action="append", help="Base branch mapping in repo=branch form. Repeat as needed.")
+    add_task.set_defaults(func=cmd_add_task)
+
+    add_evidence = subparsers.add_parser("add-evidence", help="Append an evidence entry to a task.")
+    add_board_arg(add_evidence)
+    add_evidence.add_argument("task_id")
+    add_evidence.add_argument("--type", required=True, help="Evidence type, for example real-api, real-backend-e2e, loop-evidence, manifest.")
+    add_evidence.add_argument("--path", help="Repository-relative evidence path. Omit for external/local-only evidence.")
+    add_evidence.add_argument("--status", required=True, help="Evidence status, for example pass, pass_with_boundary, missing.")
+    add_evidence.add_argument("--summary", required=True, help="One-line evidence summary.")
+    add_evidence.set_defaults(func=cmd_add_evidence)
+
+    add_note = subparsers.add_parser("add-note", help="Append a note to a task.")
+    add_board_arg(add_note)
+    add_note.add_argument("task_id")
+    add_note.add_argument("note")
+    add_note.set_defaults(func=cmd_add_note)
+
+    link_sub_task = subparsers.add_parser(
+        "link-sub-task", help="Link an existing task as a child of another task."
+    )
+    add_board_arg(link_sub_task)
+    link_sub_task.add_argument("parent_task_id")
+    link_sub_task.add_argument("child_task_id")
+    link_sub_task.set_defaults(func=cmd_link_sub_task)
+
+    unlink_sub_task = subparsers.add_parser(
+        "unlink-sub-task", help="Remove a parent-child task relationship."
+    )
+    add_board_arg(unlink_sub_task)
+    unlink_sub_task.add_argument("parent_task_id")
+    unlink_sub_task.add_argument("child_task_id")
+    unlink_sub_task.set_defaults(func=cmd_unlink_sub_task)
+
+    register_plan = subparsers.add_parser("register-plan", help="Create a task board entry for an execution plan.")
+    add_board_arg(register_plan)
+    register_plan.add_argument("plan", type=lambda value: Path(value).expanduser().resolve())
+    register_plan.add_argument("--id", dest="task_id", required=True, help="Canonical task id.")
+    register_plan.add_argument("--title", help="Task title. Defaults to the plan H1.")
+    register_plan.add_argument("--domain", required=True, help="Existing task domain id.")
+    register_plan.add_argument("--repo", action="append", required=True, help="Target repo id. Repeat for multi-repo tasks.")
+    register_plan.add_argument("--requirement-ref", action="append", help="Requirement reference. Repeat as needed.")
+    register_plan.add_argument("--status", choices=sorted(KNOWN_STATUSES - {"done", "archived"}), help="Initial task status. Defaults to ready for aligned plans, blocked otherwise.")
+    register_plan.add_argument("--branch", help="Planned branch shared by target repos when applicable.")
+    register_plan.add_argument("--worktree", action="append", help="Planned worktree path. Repeat as needed.")
+    register_plan.add_argument("--base-branch", action="append", help="Base branch mapping in repo=branch form. Repeat as needed.")
+    register_plan.add_argument("--context-doc", action="append", help="Extra context doc in path=role form. Repeat as needed.")
+    register_plan.add_argument("--note", action="append", help="Initial note. Repeat as needed.")
+    register_plan.set_defaults(func=cmd_register_plan)
+
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    try:
+        return args.func(args)
+    except TaskError as exc:
+        print(f"scripts/task: error: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

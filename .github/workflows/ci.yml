@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install Python dependencies
+        run: python3 -m pip install -r requirements-dev.txt
+
+      - name: Install Gitleaks v8.24.2
+        shell: bash
+        run: |
+          curl --fail --location --silent --show-error \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.24.2/gitleaks_8.24.2_linux_x64.tar.gz \
+            | sudo tar --extract --gzip --file=- --directory=/usr/local/bin gitleaks
+          gitleaks version
+
+      - name: Run unit tests
+        run: |
+          python3 -m unittest discover -s tests -p 'test_*.py' -v
+          python3 -m unittest discover -s .agents/skills/task-board/tests -p 'test_*.py' -v
+          python3 -m unittest discover -s .agents/skills/task-plan/tests -p 'test_*.py' -v
+
+      - name: Check repository context
+        run: scripts/check-context.sh
+
+      - name: Check publication safety
+        run: scripts/check-publication.sh
+
+      - name: Check for secrets
+        run: scripts/check-secrets.sh

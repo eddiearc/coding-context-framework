@@ -1,0 +1,27 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+build/
+dist/
+tmp/
+*.tmp
+*.swp
+
+# Local-only material must not be published.
+.env
+.env.*
+!.env.example
+*.log
+*.sqlite
+*.db
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+session*.json
