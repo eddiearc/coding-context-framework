@@ -190,6 +190,8 @@ class TaskPlanContractTests(unittest.TestCase):
         self.assertNotIn("non-trivial", public_guidance)
         self.assertIn("complex or multi-step work", content)
         self.assertIn("复杂或包含多个步骤的任务", readme)
+        self.assertIn("do not add plan sections or fields solely for scope", content)
+        self.assertIn("outside `In scope` as follow-up work", content)
 
     def test_aligned_plan_passes(self):
         result = self.run_checker(make_plan())

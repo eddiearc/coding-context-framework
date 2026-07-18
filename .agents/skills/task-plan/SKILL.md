@@ -150,6 +150,13 @@ executor follows the repository's documented implementation and review process.
 If required validation cannot run in the current environment, record the
 limitation and recovery path instead of claiming it passed.
 
+Keep delivery boundaries in the existing `Goal / Scope` content and registered
+acceptance conditions; do not add plan sections or fields solely for scope
+control. Treat findings outside `In scope` as follow-up work unless they directly
+block the registered delivery or expose a safety or data-loss risk. Record the
+reason before expanding scope, and re-align when that expansion changes the
+agreed outcome or risk.
+
 The checker validates document structure, not whether human alignment truly
 occurred or whether evidence claims are accurate. Review those semantics before
 registering the plan.

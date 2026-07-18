@@ -30,9 +30,10 @@ A todo list or an unregistered draft is not an execution goal.
 2. Assign `executor` to make the smallest sufficient implementation or artifact change. The executor reports changed files, commands and results, validation entry points, and uncertainties; it does not judge final completeness.
 3. Assign `evaluator` to pressure-test the result against the original goal. The evaluator reports only blocking issues, important issues, missing evidence, and residual risk, backed by real checks where possible.
 4. Keep `main` as orchestrator and integrator: it confirms the goal, creates role handoffs, integrates accepted executor output, runs mechanical checks, records evidence, and chooses the next route.
-5. Route confirmed blocking or important findings to an executor fix pass, then ask an evaluator for targeted re-evaluation.
+5. Compare each finding with the registered `In scope`, `Out of scope`, and acceptance conditions. Route confirmed in-scope blocking or important findings to an executor fix pass, then ask an evaluator for targeted re-evaluation.
 6. Run one evaluator round by default. Run a second when the first finds important issues or the risk justifies it. Continue past two only when new blocking evidence appears and another pass is likely to improve the result.
-7. Complete only when acceptance checks pass; no blocking, important, or missing-evidence findings remain; reproducible evidence is recorded; and residual risk is explicit.
+7. Record out-of-scope findings as follow-up work or residual risk instead of fixing them. Expand scope only when a finding directly blocks the registered delivery or exposes a safety or data-loss risk; record the reason and re-align if the agreed outcome or risk changes.
+8. Complete and stop when acceptance checks pass; no in-scope blocking, important, or missing-evidence findings remain; reproducible evidence is recorded; and residual risk is explicit.
 
 ## Role Independence
 
@@ -95,13 +96,13 @@ Reproducible evidence records the command or entry point, environment, key input
 Executor contract:
 
 ```text
-Complete the objective with the smallest sufficient change. Return only: files/artifacts changed, commands run with results, validation entry points, and uncertainties. Do not judge final completeness.
+Complete the objective with the smallest sufficient change. Do not expand beyond In scope; report other findings as follow-up work unless they directly block delivery or expose a safety or data-loss risk. Return only: files/artifacts changed, commands run with results, validation entry points, and uncertainties. Do not judge final completeness.
 ```
 
 Evaluator contract:
 
 ```text
-Find problems. Do not praise. Re-read the original objective and evaluate the result with real checks where possible. Report only blocking issues, important issues, missing evidence, and residual risk. If there is no issue, say "no issue" and name the evidence checked.
+Find problems. Do not praise. Re-read the original objective and evaluate the result with real checks where possible. Mark out-of-scope findings as follow-up work or residual risk unless they directly block delivery or expose a safety or data-loss risk. Report only blocking issues, important issues, missing evidence, and residual risk. If there is no issue, say "no issue" and name the evidence checked.
 ```
 
 ## Stop Conditions
@@ -110,4 +111,4 @@ Find problems. Do not praise. Re-read the original objective and evaluate the re
 - `continue`: concrete blocking, important, or missing-evidence findings have an authorized fix path.
 - `blocked`: the plan cannot proceed within current authority or a required dependency remains unavailable; record the blocker, attempts, recovery path, and residual risk.
 
-Do not continue merely because another review is possible. Do not finish with verbal confidence alone.
+Once the registered acceptance conditions are satisfied, stop. Do not continue merely because another review or improvement is possible. Do not finish with verbal confidence alone.

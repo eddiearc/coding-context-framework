@@ -36,6 +36,7 @@
 - Aligned plan 必须登记到 task board 后才能执行。
 - Draft plan 只能对应 `blocked` task。
 - Plan 描述范围、合同、验证和证据边界，不替代实现事实。
+- 复用 `Goal / Scope` 中的 `In scope`、`Out of scope` 和既有完成条件控制交付边界，不为此增加新的必填字段。边界外发现默认记录为 follow-up；只有直接阻止本次交付，或存在安全、数据损坏风险时才扩大范围，并明确记录原因。
 - 具体实现必须在目标业务仓库的独立 git worktree 中完成（每 session / 每任务一个），不共享主 checkout 的工作区与 HEAD；主 checkout 只用于同步 main 与只读查阅。
 
 ## 验证与证据

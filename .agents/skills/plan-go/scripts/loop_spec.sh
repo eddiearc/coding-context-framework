@@ -37,6 +37,7 @@ $goal
 - Executor and evaluator were independent agents when independent agent tools were available.
 - No blocking, important, or missing-evidence evaluator findings remain.
 - Reproducible evidence and residual risk are recorded.
+- Once the registered acceptance conditions are satisfied, stop instead of pursuing optional improvements.
 
 ## Role Independence Policy
 - Main orchestrates and integrates: confirm the goal, hand off prompts, integrate accepted output, run mechanical checks, record evidence, and choose routes.
@@ -50,16 +51,17 @@ $goal
 ## Loop
 1. An independent executor produces the smallest sufficient solution or artifact.
 2. An independent evaluator attacks the result with real checks where possible.
-3. Main routes confirmed findings to an executor fix pass, integrates accepted output, and runs mechanical checks.
+3. Main routes confirmed in-scope findings to an executor fix pass, integrates accepted output, and runs mechanical checks.
 4. Evaluator performs a targeted re-evaluation when important findings or risk justify it.
 5. Stop after $rounds evaluator round(s), unless new blocking evidence makes another round useful.
+6. Record out-of-scope findings as follow-up work or residual risk. Expand scope only when they directly block delivery or expose a safety or data-loss risk, and record the reason.
 
 ## Executor Prompt
 You are the executor. Complete this objective:
 
 $goal
 
-Follow the registered aligned plan and target-repository rules. Edit or produce artifacts directly when appropriate. Do not revert unrelated changes.
+Follow the registered aligned plan and target-repository rules. Edit or produce artifacts directly when appropriate. Do not expand beyond In scope; report other findings as follow-up work unless they directly block delivery or expose a safety or data-loss risk. Do not revert unrelated changes.
 Return only: files/artifacts changed, commands run with results, validation entry points, and uncertainties. Do not judge final completeness.
 
 ## Evaluator Prompt
@@ -68,7 +70,7 @@ You are the evaluator. Find problems; do not praise.
 Original objective:
 $goal
 
-Re-read the registered plan and inspect the result against its scope, constraints, and acceptance checks. Look for bugs, missing requirements, weak evidence, integration failures, edge cases, and requirement drift. Run real checks when possible.
+Re-read the registered plan and inspect the result against its scope, constraints, and acceptance checks. Look for bugs, missing requirements, weak evidence, integration failures, edge cases, and requirement drift. Mark out-of-scope findings as follow-up work or residual risk unless they directly block delivery or expose a safety or data-loss risk. Run real checks when possible.
 Return only: blocking issues, important issues, missing evidence, and residual risk. If there is no issue, say "no issue" and name the evidence checked.
 
 ## Reproducible Evidence

@@ -198,6 +198,8 @@ class PlanGoContractTests(unittest.TestCase):
         self.assertIn("executor", skill.lower())
         self.assertIn("evaluator", skill.lower())
         self.assertIn("reproducible evidence", skill.lower())
+        self.assertIn("out-of-scope findings as follow-up work", skill.lower())
+        self.assertIn("once the registered acceptance conditions are satisfied, stop", skill.lower())
         self.assertNotIn("explicitly accepted", skill.lower())
         self.assertIn('display_name: "Go!"', metadata)
         self.assertIn("$plan-go", metadata)
@@ -214,6 +216,8 @@ class PlanGoContractTests(unittest.TestCase):
         self.assertIn("Execute the plan", result.stdout)
         self.assertIn("Executor Prompt", result.stdout)
         self.assertIn("Evaluator Prompt", result.stdout)
+        self.assertIn("out-of-scope findings as follow-up work", result.stdout.lower())
+        self.assertIn("acceptance conditions are satisfied", result.stdout.lower())
         self.assertNotIn("~/.codex", result.stdout)
 
     def test_init_outputs_active_template_with_executor(self):
