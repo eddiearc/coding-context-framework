@@ -26,6 +26,7 @@ trap 'rm -rf -- "$STAGING"' EXIT
 
 files=(
   AGENTS.md
+  CLAUDE.md
   ARCHITECTURE.md
   VERSION
   scripts/task
@@ -50,6 +51,8 @@ files=(
   docs/generated/evidence/templates/validation-report.md
 )
 
+claude_skills=(task-board task-plan plan-go)
+
 for relative in "${files[@]}"; do
   source_file="$SOURCE_ROOT/$relative"
   if [[ ! -f "$source_file" ]]; then
@@ -61,14 +64,49 @@ for relative in "${files[@]}"; do
 done
 
 conflicts=()
+migrate_legacy_claude_md=false
+migrate_legacy_claude_skills=false
+
+if [[ -L "$TARGET/CLAUDE.md" && "$(readlink "$TARGET/CLAUDE.md")" == "AGENTS.md" ]]; then
+  migrate_legacy_claude_md=true
+fi
+
+if [[ -L "$TARGET/.claude/skills" ]]; then
+  if [[ "$(readlink "$TARGET/.claude/skills")" == "../.agents/skills" ]]; then
+    migrate_legacy_claude_skills=true
+  else
+    conflicts+=(".claude/skills")
+  fi
+elif [[ -e "$TARGET/.claude/skills" && ! -d "$TARGET/.claude/skills" ]]; then
+  conflicts+=(".claude/skills")
+fi
+
 for relative in "${files[@]}"; do
   destination="$TARGET/$relative"
+  if [[ "$relative" == "CLAUDE.md" && "$migrate_legacy_claude_md" == true ]]; then
+    continue
+  fi
   if [[ -e "$destination" || -L "$destination" ]]; then
     if [[ ! -f "$destination" ]] || ! cmp -s -- "$STAGING/$relative" "$destination"; then
       conflicts+=("$relative")
     fi
   fi
 done
+
+if [[ "$migrate_legacy_claude_skills" != true ]]; then
+  for name in "${claude_skills[@]}"; do
+    relative=".claude/skills/$name"
+    destination="$TARGET/$relative"
+    expected_target="../../.agents/skills/$name"
+    if [[ -L "$destination" ]]; then
+      if [[ "$(readlink "$destination")" != "$expected_target" ]]; then
+        conflicts+=("$relative")
+      fi
+    elif [[ -e "$destination" ]]; then
+      conflicts+=("$relative")
+    fi
+  done
+fi
 
 if (( ${#conflicts[@]} > 0 )); then
   echo "initialization failed: refusing to overwrite changed files:" >&2
@@ -80,9 +118,23 @@ fi
 
 for relative in "${files[@]}"; do
   destination="$TARGET/$relative"
+  if [[ "$relative" == "CLAUDE.md" && "$migrate_legacy_claude_md" == true ]]; then
+    unlink "$destination"
+  fi
   if [[ ! -e "$destination" ]]; then
     mkdir -p -- "$(dirname -- "$destination")"
     cp -- "$STAGING/$relative" "$destination"
+  fi
+done
+
+if [[ "$migrate_legacy_claude_skills" == true ]]; then
+  unlink "$TARGET/.claude/skills"
+fi
+mkdir -p -- "$TARGET/.claude/skills"
+for name in "${claude_skills[@]}"; do
+  destination="$TARGET/.claude/skills/$name"
+  if [[ ! -e "$destination" && ! -L "$destination" ]]; then
+    ln -s "../../.agents/skills/$name" "$destination"
   fi
 done
 

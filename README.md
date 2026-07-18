@@ -12,6 +12,7 @@ Coding Context Framework v0.1.0 是一个通用、Git-backed、repository-native
 - 可按风险选择的 feedback loop 词汇：Unit / Module tests、evals、structural checks、Mock E2E、Real CLI / Workflow 与 Real API E2E。
 - Reproducible evidence 与 recorded demos 用于审阅实际运行结果；Evidence / Demo 不是测试层。
 - 初始化、上下文检查、发布安全检查、secret scan 和 CI。
+- Codex 与 Claude Code 共享同一份 `AGENTS.md` 和 `.agents/skills` canonical source。
 - Domain、plan 和 evidence 模板；不附带任何真实或教程任务内容。
 
 ## 快速开始
@@ -55,6 +56,7 @@ scripts/task register-plan \
 
 ```text
 AGENTS.md                          通用协作规则
+CLAUDE.md                         Claude Code 入口，import AGENTS.md
 ARCHITECTURE.md                    边界与组件地图
 tasks/board.yaml                   空白 task 状态索引
 tasks/task.schema.json             task board 合同
@@ -62,6 +64,7 @@ scripts/task                       稳定 CLI 入口
 .agents/skills/task-board/         task board 实现与测试
 .agents/skills/task-plan/          plan 结构与检查器
 .agents/skills/plan-go/            plan 执行与 executor/evaluator 闭环
+.claude/skills/                    Claude project skill 相对软链接
 docs/domains/                      domain 模板
 docs/exec-plans/                   active/completed 计划目录
 docs/generated/evidence/           evidence 模板
@@ -81,7 +84,7 @@ scripts/check-all.sh --skip-secrets
 ./init.sh --target /workspace/project
 ```
 
-初始化支持空目录和包含空格的路径；重复执行保持幂等。若目标文件已有不同内容，它会停止而不是覆盖。
+初始化支持空目录和包含空格的路径；重复执行保持幂等。若目标文件已有不同内容，它会停止而不是覆盖。旧版 `CLAUDE.md` 和 `.claude/skills` 整体软链接会自动迁移为官方支持的 import 与逐 skill 软链接布局。
 
 ## License
 

@@ -6,11 +6,13 @@ Coding Context Framework 是一个 repository-native、file-based 的通用协�
 
 ```text
 AGENTS.md                          通用工作协议
+CLAUDE.md                         Claude Code import 入口
 tasks/board.yaml                   task 状态索引
 tasks/task.schema.json             board 数据合同
 scripts/task                       稳定 CLI 入口
 .agents/skills/task-board/         board 行为、实现和测试
 .agents/skills/task-plan/          plan 格式、检查器和测试
+.claude/skills/<name>              指向 canonical .agents skill 的 Claude 入口
 docs/domains/                      domain 抽象与模板
 docs/exec-plans/                   active/completed 决策记录
 docs/design-docs/                  验证词汇
@@ -34,6 +36,7 @@ docs/generated/evidence/templates/ evidence 模板
 - `requirement_refs` 是唯一需求引用字段。
 - active/review task 关联 plan，review/done task 关联 evidence。
 - 根 board 的 task 列表为空，不包含实例或教程数据。
+- Claude compatibility entry 不复制规则或 skill 内容，并且所有软链接只能解析到仓库内部的 `.agents/skills`。
 
 ## 非目标
 

@@ -18,6 +18,7 @@ fi
 required=(
   README.md
   AGENTS.md
+  CLAUDE.md
   ARCHITECTURE.md
   VERSION
   tasks/board.yaml
@@ -42,6 +43,20 @@ required=(
 for relative in "${required[@]}"; do
   if [[ ! -f "$ROOT/$relative" ]]; then
     echo "context check failed: missing $relative" >&2
+    exit 1
+  fi
+done
+
+if [[ "$(tr -d '[:space:]' < "$ROOT/CLAUDE.md")" != "@AGENTS.md" ]]; then
+  echo "context check failed: CLAUDE.md must import AGENTS.md" >&2
+  exit 1
+fi
+
+for name in task-board task-plan plan-go; do
+  link="$ROOT/.claude/skills/$name"
+  expected="../../.agents/skills/$name"
+  if [[ ! -L "$link" || "$(readlink "$link")" != "$expected" ]]; then
+    echo "context check failed: .claude/skills/$name must link to $expected" >&2
     exit 1
   fi
 done

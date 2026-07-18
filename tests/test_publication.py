@@ -33,6 +33,20 @@ class PublicationTests(unittest.TestCase):
             self.assertNotEqual(0, result.returncode)
             self.assertIn("escaping-symlink", result.stdout + result.stderr)
 
+    def test_internal_relative_symlink_is_allowed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            canonical = root / ".agents/skills/example"
+            canonical.mkdir(parents=True)
+            (canonical / "SKILL.md").write_text("---\nname: example\n---\n")
+            links = root / ".claude/skills"
+            links.mkdir(parents=True)
+            os.symlink("../../.agents/skills/example", links / "example")
+
+            result = run(REPOSITORY / "scripts/check-publication.sh", "--root", root)
+
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
     def test_worktree_git_metadata_file_is_excluded(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

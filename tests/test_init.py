@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -19,6 +20,7 @@ class InitTests(unittest.TestCase):
             self.assertEqual(0, result.returncode, result.stderr)
             for relative in (
                 "AGENTS.md",
+                "CLAUDE.md",
                 "ARCHITECTURE.md",
                 "VERSION",
                 "scripts/task",
@@ -38,6 +40,19 @@ class InitTests(unittest.TestCase):
             ):
                 with self.subTest(relative=relative):
                     self.assertTrue((destination / relative).is_file())
+
+            self.assertEqual("@AGENTS.md\n", (destination / "CLAUDE.md").read_text())
+            for name in ("task-board", "task-plan", "plan-go"):
+                with self.subTest(claude_skill=name):
+                    link = destination / ".claude/skills" / name
+                    self.assertTrue(link.is_symlink())
+                    self.assertEqual(
+                        f"../../.agents/skills/{name}", os.readlink(link)
+                    )
+                    self.assertEqual(
+                        (destination / ".agents/skills" / name).resolve(),
+                        link.resolve(strict=True),
+                    )
 
             for relative in (
                 ".agents/skills/plan-go/scripts/loop-evidence",
@@ -69,6 +84,11 @@ class InitTests(unittest.TestCase):
                 if path.is_file()
             }
             self.assertEqual(before, after)
+            for name in ("task-board", "task-plan", "plan-go"):
+                self.assertEqual(
+                    f"../../.agents/skills/{name}",
+                    os.readlink(destination / ".claude/skills" / name),
+                )
 
     def test_does_not_silently_overwrite_a_changed_file(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -84,6 +104,38 @@ class InitTests(unittest.TestCase):
             self.assertNotEqual(0, second.returncode)
             self.assertEqual(marker, protected.read_text())
             self.assertIn("AGENTS.md", second.stderr + second.stdout)
+
+    def test_does_not_overwrite_a_conflicting_claude_skill_entry(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / "project"
+            conflict = destination / ".claude/skills/task-plan"
+            conflict.mkdir(parents=True)
+            (conflict / "SKILL.md").write_text("local Claude skill\n")
+
+            result = self.initialize(destination)
+
+            self.assertNotEqual(0, result.returncode)
+            self.assertTrue(conflict.is_dir())
+            self.assertIn(".claude/skills/task-plan", result.stderr + result.stdout)
+
+    def test_migrates_legacy_claude_symlinks(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / "project"
+            (destination / ".claude").mkdir(parents=True)
+            os.symlink("AGENTS.md", destination / "CLAUDE.md")
+            os.symlink("../.agents/skills", destination / ".claude/skills")
+
+            result = self.initialize(destination)
+
+            self.assertEqual(0, result.returncode, result.stderr)
+            self.assertFalse((destination / "CLAUDE.md").is_symlink())
+            self.assertEqual("@AGENTS.md\n", (destination / "CLAUDE.md").read_text())
+            self.assertFalse((destination / ".claude/skills").is_symlink())
+            for name in ("task-board", "task-plan", "plan-go"):
+                self.assertEqual(
+                    f"../../.agents/skills/{name}",
+                    os.readlink(destination / ".claude/skills" / name),
+                )
 
 
 if __name__ == "__main__":
