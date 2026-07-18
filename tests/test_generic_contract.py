@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import re
 import unittest
 from pathlib import Path
@@ -10,6 +11,14 @@ from tests.helpers import REPOSITORY
 
 
 class GenericAbstractionContractTests(unittest.TestCase):
+    def test_vendored_plan_go_license_has_exact_required_content(self) -> None:
+        license_path = REPOSITORY / ".agents/skills/plan-go/LICENSE"
+        digest = hashlib.sha256(license_path.read_bytes()).hexdigest()
+        self.assertEqual(
+            "7f0e48e068807ccd7ac207dc5da65cd3ea2f6a2db78463cbe24d11b680a189c7",
+            digest,
+        )
+
     def test_repository_contains_only_generic_framework_content(self) -> None:
         forbidden = {
             "personal brand": "Id" + "an",
@@ -24,6 +33,9 @@ class GenericAbstractionContractTests(unittest.TestCase):
                 continue
             relative = path.relative_to(REPOSITORY)
             if any(part in {".git", "__pycache__"} for part in relative.parts):
+                continue
+            if relative == Path(".agents/skills/plan-go/LICENSE"):
+                # The adapted skill must retain the upstream MIT copyright notice.
                 continue
             try:
                 text = path.read_text(encoding="utf-8")

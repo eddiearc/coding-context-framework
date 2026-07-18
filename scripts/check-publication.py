@@ -111,7 +111,10 @@ def iter_workspace_paths(root: Path):
                 kept_directories.append(name)
         directory_names[:] = kept_directories
         for name in file_names:
-            yield base / name
+            candidate = base / name
+            if candidate.relative_to(root) == Path(".git"):
+                continue
+            yield candidate
 
 
 def scan(root: Path) -> list[tuple[str, Path]]:

@@ -10,6 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[4]
 SKILL = ROOT / ".agents/skills/task-plan/SKILL.md"
 CHECKER = ROOT / ".agents/skills/task-plan/scripts/check-task-plan.sh"
+README = ROOT / "README.md"
 
 
 LAYERS = (
@@ -133,6 +134,25 @@ def make_plan(status="Aligned", execution="Allowed"):
     return plan.replace("@@LAYER_ROWS@@", rows)
 
 
+def make_feedback_loop_plan():
+    return make_plan().replace(
+        "Covered layers: Unit, Contract, Real API / CLI, Evidence / Demo.\n"
+        "Entry / Command / Artifact per layer: See the table below.\n"
+        "Omitted layers with reasons / risks: See rows marked No.\n\n"
+        "| Layer | Required | Entry / Command / Artifact | Proves | Does not prove / Risk |\n"
+        "| --- | --- | --- | --- | --- |\n"
+        + "\n".join(f"| {' | '.join(row)} |" for row in LAYERS),
+        "Selected feedback loops: Unit / Module tests, structural checks, Real CLI / Workflow.\n"
+        "Entry / Command / Artifact per feedback loop: See the table below.\n"
+        "Residual risks: Hosted API behavior is outside this task.\n\n"
+        "| Feedback loop | Entry / Command / Artifact | Proves | Does not prove / Risk |\n"
+        "| --- | --- | --- | --- |\n"
+        "| Unit / Module tests | python3 -m unittest | Local rules | Runtime wiring |\n"
+        "| structural checks | Validate task schema | Stable structure | Hosted behavior |\n"
+        "| Real CLI / Workflow | Run the checker CLI | Public CLI behavior | External APIs |",
+    )
+
+
 class TaskPlanContractTests(unittest.TestCase):
     def run_checker(self, plan, *extra_args):
         with tempfile.TemporaryDirectory() as directory:
@@ -147,6 +167,7 @@ class TaskPlanContractTests(unittest.TestCase):
 
     def test_skill_is_public_and_documents_the_contract(self):
         content = SKILL.read_text(encoding="utf-8")
+        readme = README.read_text(encoding="utf-8")
         self.assertIn("name: task-plan", content)
         self.assertIn("check-task-plan.sh", content)
         for section in (
@@ -164,6 +185,11 @@ class TaskPlanContractTests(unittest.TestCase):
         ):
             self.assertIn(section, content)
         self.assertIn("--requirement-ref", content)
+        public_guidance = content + readme
+        self.assertNotIn("非平凡", public_guidance)
+        self.assertNotIn("non-trivial", public_guidance)
+        self.assertIn("complex or multi-step work", content)
+        self.assertIn("复杂或包含多个步骤的任务", readme)
 
     def test_aligned_plan_passes(self):
         result = self.run_checker(make_plan())
@@ -175,6 +201,90 @@ class TaskPlanContractTests(unittest.TestCase):
             make_plan("Draft - waiting for user alignment", "Blocked")
         )
         self.assertEqual(0, result.returncode, result.stderr)
+
+    def test_selectable_feedback_loop_plan_passes(self):
+        result = self.run_checker(make_feedback_loop_plan())
+        self.assertEqual(0, result.returncode, result.stderr)
+
+    def test_feedback_loop_plan_does_not_require_every_category(self):
+        plan = make_feedback_loop_plan().replace(
+            "| Real CLI / Workflow | Run the checker CLI | Public CLI behavior | External APIs |\n",
+            "",
+        ).replace(
+            "Selected feedback loops: Unit / Module tests, structural checks, Real CLI / Workflow.",
+            "Selected feedback loops: Unit / Module tests, structural checks.",
+        )
+        result = self.run_checker(plan)
+        self.assertEqual(0, result.returncode, result.stderr)
+
+    def test_feedback_loop_plan_rejects_unknown_or_duplicate_rows(self):
+        unknown = make_feedback_loop_plan().replace(
+            "| Real CLI / Workflow | Run the checker CLI | Public CLI behavior | External APIs |",
+            "| Mystery | Save test output | Reproducible evidence | Future drift |",
+        )
+        self.assertEqual(1, self.run_checker(unknown).returncode)
+
+        duplicate = make_feedback_loop_plan().replace(
+            "| Real CLI / Workflow | Run the checker CLI | Public CLI behavior | External APIs |",
+            "| structural checks | Save test output | Reproducible evidence | Future drift |",
+        )
+        self.assertEqual(1, self.run_checker(duplicate).returncode)
+
+    def test_feedback_loop_selected_field_rejects_unknown_duplicate_and_mismatch(self):
+        selected = (
+            "Selected feedback loops: Unit / Module tests, structural checks, "
+            "Real CLI / Workflow."
+        )
+        cases = {
+            "unknown": "Selected feedback loops: Unit / Module tests, Mystery.",
+            "duplicate": (
+                "Selected feedback loops: Unit / Module tests, structural checks, "
+                "structural checks, Real CLI / Workflow."
+            ),
+            "mismatch": (
+                "Selected feedback loops: Unit / Module tests, Real CLI / Workflow."
+            ),
+        }
+        for name, replacement in cases.items():
+            with self.subTest(name=name):
+                result = self.run_checker(
+                    make_feedback_loop_plan().replace(selected, replacement)
+                )
+                self.assertEqual(1, result.returncode)
+
+    def test_feedback_loop_rejects_evidence_only(self):
+        plan = make_feedback_loop_plan().replace(
+            "Selected feedback loops: Unit / Module tests, structural checks, Real CLI / Workflow.",
+            "Selected feedback loops: Evidence / Demo.",
+        ).replace(
+            "| Unit / Module tests | python3 -m unittest | Local rules | Runtime wiring |\n"
+            "| structural checks | Validate task schema | Stable structure | Hosted behavior |\n"
+            "| Real CLI / Workflow | Run the checker CLI | Public CLI behavior | External APIs |",
+            "| Evidence / Demo | Save test output | Reproducible evidence | Future drift |",
+        )
+        self.assertEqual(1, self.run_checker(plan).returncode)
+
+    def test_validation_table_inside_fence_does_not_count(self):
+        table = (
+            "| Feedback loop | Entry / Command / Artifact | Proves | Does not prove / Risk |\n"
+            "| --- | --- | --- | --- |\n"
+            "| Unit / Module tests | python3 -m unittest | Local rules | Runtime wiring |\n"
+            "| structural checks | Validate task schema | Stable structure | Hosted behavior |\n"
+            "| Real CLI / Workflow | Run the checker CLI | Public CLI behavior | External APIs |"
+        )
+        fenced = make_feedback_loop_plan().replace(
+            table, f"```markdown\n{table}\n```"
+        )
+        self.assertEqual(1, self.run_checker(fenced).returncode)
+
+    def test_validation_table_requires_exactly_one_separator(self):
+        separator = "| --- | --- | --- | --- |"
+        missing = make_feedback_loop_plan().replace(separator + "\n", "", 1)
+        duplicate = make_feedback_loop_plan().replace(
+            separator, separator + "\n" + separator, 1
+        )
+        self.assertEqual(1, self.run_checker(missing).returncode)
+        self.assertEqual(1, self.run_checker(duplicate).returncode)
 
     def test_usage_and_missing_file_exit_two(self):
         no_args = subprocess.run(

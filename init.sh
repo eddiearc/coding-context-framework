@@ -35,9 +35,16 @@ files=(
   .agents/skills/task-board/scripts/task
   .agents/skills/task-plan/SKILL.md
   .agents/skills/task-plan/scripts/check-task-plan.sh
+  .agents/skills/plan-go/SKILL.md
+  .agents/skills/plan-go/agents/openai.yaml
+  .agents/skills/plan-go/LICENSE
+  .agents/skills/plan-go/scripts/loop-evidence
+  .agents/skills/plan-go/scripts/loop_evidence.py
+  .agents/skills/plan-go/scripts/loop_spec.sh
   docs/domains/index.md
   docs/domains/general.md
   docs/design-docs/layered-testing-practice.md
+  docs/exec-plans/_template.md
   docs/generated/evidence/templates/evidence-manifest.yaml
   docs/generated/evidence/templates/integration-cases.md
   docs/generated/evidence/templates/validation-report.md
@@ -82,6 +89,9 @@ done
 chmod +x \
   "$TARGET/scripts/task" \
   "$TARGET/.agents/skills/task-board/scripts/task" \
-  "$TARGET/.agents/skills/task-plan/scripts/check-task-plan.sh"
+  "$TARGET/.agents/skills/task-plan/scripts/check-task-plan.sh" \
+  "$TARGET/.agents/skills/plan-go/scripts/loop-evidence" \
+  "$TARGET/.agents/skills/plan-go/scripts/loop_evidence.py" \
+  "$TARGET/.agents/skills/plan-go/scripts/loop_spec.sh"
 
 echo "initialized Coding Context Framework in $TARGET"

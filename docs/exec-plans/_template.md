@@ -48,19 +48,15 @@ Expected RED: describe the expected failing behavior
 Expected GREEN: describe the expected passing behavior
 Missing evidence policy: record attempts and never claim omitted evidence passed
 Minimum attempts before accepting missing evidence: 2
-Covered layers: list covered layers
-Entry / Command / Artifact per layer: see the table
-Omitted layers with reasons / risks: list omissions and residual risks
+Selected feedback loops: Unit / Module tests, structural checks, Real CLI / Workflow
+Entry / Command / Artifact per feedback loop: see the table
+Residual risks: list what the selected loops do not establish
 
-| Layer | Required | Entry / Command / Artifact | Proves | Does not prove / Risk |
-| --- | --- | --- | --- | --- |
-| Unit | Yes | concrete command | concrete claim | residual risk |
-| Component / Module | No | explicit skip reason | omission is explicit | residual risk |
-| Contract | Yes | concrete command | concrete claim | residual risk |
-| Mock E2E | No | explicit skip reason | omission is explicit | residual risk |
-| Real API / CLI | Yes | concrete command | concrete claim | residual risk |
-| Real Backend E2E | No | explicit skip reason | omission is explicit | residual risk |
-| Evidence / Demo | Yes | concrete artifact | concrete claim | residual risk |
+| Feedback loop | Entry / Command / Artifact | Proves | Does not prove / Risk |
+| --- | --- | --- | --- |
+| Unit / Module tests | concrete command | concrete claim | residual risk |
+| structural checks | concrete command | concrete claim | residual risk |
+| Real CLI / Workflow | concrete command | concrete claim | residual risk |
 
 ## Evidence Plan
 

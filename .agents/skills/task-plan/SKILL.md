@@ -17,7 +17,7 @@ change repository policy while using this skill.
 2. Capture unplanned future work with `scripts/task add-task` as `backlog`, or
    as `blocked` when a concrete blocker is known. Use `--requirement-ref` for
    requirement links when they exist.
-3. For non-trivial work, ask one unresolved, high-leverage question at a time.
+3. For complex or multi-step work, ask one unresolved, high-leverage question at a time.
    Explain why it matters, recommend an answer, and wait for the user response.
 4. Record only questions actually asked and answers actually received in the
    `Human Alignment Log`. Mark an assumption as user-authorized only when the
@@ -77,7 +77,7 @@ may use level-three or deeper headings.
 
 ## Validation Contract
 
-Put each label and its value on one line inside `Validation Plan`:
+Put each common label and its value on one line inside `Validation Plan`:
 
 - `Test Boundary:`
 - `Why this boundary:`
@@ -89,15 +89,42 @@ Put each label and its value on one line inside `Validation Plan`:
 - `Expected GREEN:`
 - `Missing evidence policy:`
 - `Minimum attempts before accepting missing evidence:`
-- `Covered layers:`
-- `Entry / Command / Artifact per layer:`
-- `Omitted layers with reasons / risks:`
 
 Set `Minimum attempts before accepting missing evidence:` to an integer of at
 least `2`. Each failed attempt must record its entry point, environment, concrete
 blocker, and recovery path. Missing evidence is not accepted by default.
 
+New plans then use these labels:
+
+- `Selected feedback loops:`
+- `Entry / Command / Artifact per feedback loop:`
+- `Residual risks:`
+
+Select the smallest effective feedback loop for the task. Allowed rows are
+`Unit / Module tests`, `evals`, `structural checks`, `Mock E2E`, `Real CLI /
+Workflow`, and `Real API E2E`. `Selected feedback loops:` is a comma-separated
+list of those exact names and must match the table rows exactly. Include at
+least one row, use every selected row at most once, and fill every cell with
+meaningful content. The table must contain exactly one Markdown separator row
+and tables inside fenced code blocks do not satisfy the contract.
+
+`Evidence / Demo` is not a feedback loop or test layer. Record reproducible
+evidence and recorded demos under `Evidence Plan`; they do not upgrade the
+underlying validation depth.
+
 Add exactly this table inside `Validation Plan`:
+
+```markdown
+| Feedback loop | Entry / Command / Artifact | Proves | Does not prove / Risk |
+| --- | --- | --- | --- |
+| Unit / Module tests | concrete entry | concrete claim | residual risk |
+| structural checks | concrete entry | concrete claim | residual risk |
+| Real CLI / Workflow | concrete entry | concrete claim | residual risk |
+```
+
+The checker continues to accept already-registered active plans that use the
+legacy labels and seven-row table below. Do not use this legacy form for new
+plans:
 
 ```markdown
 | Layer | Required | Entry / Command / Artifact | Proves | Does not prove / Risk |
@@ -111,9 +138,10 @@ Add exactly this table inside `Validation Plan`:
 | Evidence / Demo | Yes or No | concrete entry or skip reason | concrete claim | residual risk |
 ```
 
-Replace `Yes or No` with exactly `Yes` or `No`. Fill all cells with meaningful
-content. For an omitted layer, use `No`, name the skip entry or reason, and state
-the residual risk; do not use placeholders such as `TBD` or `N/A`.
+In a legacy plan, replace `Yes or No` with exactly `Yes` or `No`. Fill all cells
+with meaningful content. For an omitted layer, use `No`, name the skip entry or
+reason, and state the residual risk; do not use placeholders such as `TBD` or
+`N/A`.
 
 ## Execution Boundary
 

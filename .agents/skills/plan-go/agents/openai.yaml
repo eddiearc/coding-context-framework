@@ -1,0 +1,5 @@
+interface:
+  display_name: "Go!"
+  short_description: "按 aligned plan 执行 executor/evaluator 闭环并留证"
+  default_prompt: "Use $plan-go to execute the registered aligned plan through an independent executor/evaluator fix loop and finish with reproducible evidence."
+

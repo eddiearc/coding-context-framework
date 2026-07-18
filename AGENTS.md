@@ -32,16 +32,17 @@
 
 ## Plan 与执行门禁
 
-- 非平凡任务使用 `.agents/skills/task-plan/SKILL.md`，plan 放在 `docs/exec-plans/active/`。
+- 复杂任务或包含多个步骤的任务使用 `.agents/skills/task-plan/SKILL.md`，plan 放在 `docs/exec-plans/active/`。
 - Aligned plan 必须登记到 task board 后才能执行。
 - Draft plan 只能对应 `blocked` task。
 - Plan 描述范围、合同、验证和证据边界，不替代实现事实。
-- 具体实现默认在目标业务仓库自己的分支或 worktree 中完成。
+- 具体实现必须在目标业务仓库的独立 git worktree 中完成（每 session / 每任务一个），不共享主 checkout 的工作区与 HEAD；主 checkout 只用于同步 main 与只读查阅。
 
 ## 验证与证据
 
 - 改代码前先读相关测试，改后运行最小但有效的目标仓库验证。
-- 明确区分 Unit、Component / Module、Contract、Mock E2E、Real API / CLI、Real Backend E2E、Evidence / Demo。
+- 根据改动范围选择 smallest effective feedback loop：按需执行 Unit / Module tests、evals、structural checks、Mock E2E、Real CLI / Workflow 或 Real API E2E。
+- 为实际运行的 feedback loop 保留 reproducible evidence 或 recorded demos；Evidence / Demo 是证据载体，不是测试层，也不会提升底层验证深度。
 - mock、synthetic、local CLI 和真实后端结果必须准确标注。
 - 真实 HTTP/CLI/workflow 或外部服务集成测试入口应提交到目标仓库并默认 skip，避免 CI 默认请求真实依赖。
 - 交付说明记录命令、环境、关键输入、实际结果、跳过原因和剩余风险。
@@ -58,6 +59,7 @@
 python3 -m unittest discover -s tests -p 'test_*.py' -v
 python3 -m unittest discover -s .agents/skills/task-board/tests -p 'test_*.py' -v
 python3 -m unittest discover -s .agents/skills/task-plan/tests -p 'test_*.py' -v
+python3 -m unittest discover -s .agents/skills/plan-go/tests -p 'test_*.py' -v
 scripts/check-context.sh
 scripts/check-publication.sh
 git diff --check

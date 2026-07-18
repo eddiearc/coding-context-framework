@@ -27,6 +27,12 @@ required=(
   .agents/skills/task-board/scripts/task
   .agents/skills/task-plan/SKILL.md
   .agents/skills/task-plan/scripts/check-task-plan.sh
+  .agents/skills/plan-go/SKILL.md
+  .agents/skills/plan-go/agents/openai.yaml
+  .agents/skills/plan-go/LICENSE
+  .agents/skills/plan-go/scripts/loop-evidence
+  .agents/skills/plan-go/scripts/loop_evidence.py
+  .agents/skills/plan-go/scripts/loop_spec.sh
   docs/domains/index.md
   docs/domains/general.md
   docs/design-docs/layered-testing-practice.md

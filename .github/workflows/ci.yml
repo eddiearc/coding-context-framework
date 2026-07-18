@@ -37,6 +37,7 @@ jobs:
           python3 -m unittest discover -s tests -p 'test_*.py' -v
           python3 -m unittest discover -s .agents/skills/task-board/tests -p 'test_*.py' -v
           python3 -m unittest discover -s .agents/skills/task-plan/tests -p 'test_*.py' -v
+          python3 -m unittest discover -s .agents/skills/plan-go/tests -p 'test_*.py' -v
 
       - name: Check repository context
         run: scripts/check-context.sh

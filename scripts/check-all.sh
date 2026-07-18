@@ -14,6 +14,7 @@ cd "$ROOT"
 python3 -m unittest discover -s tests -p 'test_*.py' -v
 python3 -m unittest discover -s .agents/skills/task-board/tests -p 'test_*.py' -v
 python3 -m unittest discover -s .agents/skills/task-plan/tests -p 'test_*.py' -v
+python3 -m unittest discover -s .agents/skills/plan-go/tests -p 'test_*.py' -v
 scripts/check-context.sh
 scripts/check-publication.sh
 if [[ "$SKIP_SECRETS" -eq 0 ]]; then

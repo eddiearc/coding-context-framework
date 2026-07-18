@@ -8,8 +8,9 @@ Coding Context Framework v0.1.0 是一个通用、Git-backed、repository-native
 
 - JSON Schema 约束的 YAML task board。
 - 支持任务、状态、计划、证据、备注和父子关系的原子 CLI。
-- 非平凡任务的 plan contract 与确定性检查器。
-- Unit、Component / Module、Contract、Mock E2E、Real API / CLI、Real Backend E2E、Evidence / Demo 七层验证词汇。
+- 复杂或包含多个步骤的任务使用 plan contract 与确定性检查器。
+- 可按风险选择的 feedback loop 词汇：Unit / Module tests、evals、structural checks、Mock E2E、Real CLI / Workflow 与 Real API E2E。
+- Reproducible evidence 与 recorded demos 用于审阅实际运行结果；Evidence / Demo 不是测试层。
 - 初始化、上下文检查、发布安全检查、secret scan 和 CI。
 - Domain、plan 和 evidence 模板；不附带任何真实或教程任务内容。
 
@@ -35,7 +36,7 @@ scripts/task add-task \
   --requirement-ref REQ-001
 ```
 
-非平凡任务先从 `docs/exec-plans/_template.md` 创建 plan，按 [task-plan](.agents/skills/task-plan/SKILL.md) 校验并登记：
+复杂或包含多个步骤的任务先从 `docs/exec-plans/_template.md` 创建 plan，按 [task-plan](.agents/skills/task-plan/SKILL.md) 校验并登记：
 
 ```bash
 .agents/skills/task-plan/scripts/check-task-plan.sh \
@@ -60,6 +61,7 @@ tasks/task.schema.json             task board 合同
 scripts/task                       稳定 CLI 入口
 .agents/skills/task-board/         task board 实现与测试
 .agents/skills/task-plan/          plan 结构与检查器
+.agents/skills/plan-go/            plan 执行与 executor/evaluator 闭环
 docs/domains/                      domain 模板
 docs/exec-plans/                   active/completed 计划目录
 docs/generated/evidence/           evidence 模板

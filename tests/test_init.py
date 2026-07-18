@@ -26,11 +26,26 @@ class InitTests(unittest.TestCase):
                 "tasks/task.schema.json",
                 ".agents/skills/task-board/SKILL.md",
                 ".agents/skills/task-plan/SKILL.md",
+                ".agents/skills/plan-go/SKILL.md",
+                ".agents/skills/plan-go/agents/openai.yaml",
+                ".agents/skills/plan-go/LICENSE",
+                ".agents/skills/plan-go/scripts/loop-evidence",
+                ".agents/skills/plan-go/scripts/loop_evidence.py",
+                ".agents/skills/plan-go/scripts/loop_spec.sh",
                 "docs/design-docs/layered-testing-practice.md",
+                "docs/exec-plans/_template.md",
                 "docs/generated/evidence/templates/validation-report.md",
             ):
                 with self.subTest(relative=relative):
                     self.assertTrue((destination / relative).is_file())
+
+            for relative in (
+                ".agents/skills/plan-go/scripts/loop-evidence",
+                ".agents/skills/plan-go/scripts/loop_evidence.py",
+                ".agents/skills/plan-go/scripts/loop_spec.sh",
+            ):
+                with self.subTest(executable=relative):
+                    self.assertTrue((destination / relative).stat().st_mode & 0o111)
 
             validation = run(destination / "scripts/task", "validate", cwd=destination)
             self.assertEqual(0, validation.returncode, validation.stderr)
