@@ -7,13 +7,51 @@ smallest effective feedback loop，而不是机械执行所有类别。每个结
 本文不替代 `.agents/skills/task-plan/SKILL.md` 的 plan contract；plan 的结构、alignment、
 missing-evidence policy 与 checker 规则仍以该 skill 为准。
 
+## Outside-in 选择方法
+
+1. 先写出用户或外部消费者可观察的验收行为，以及失败会造成的影响。
+2. 优先选择能运行该行为及其关键依赖的最深可行 feedback loop：Agent eval、Real API
+   E2E、Real CLI / Workflow，或在真实依赖不安全、不可用、昂贵或不稳定时使用跨组件
+   integration / Mock E2E。
+3. 当 broader loop 无法经济地覆盖密集分支或状态转换，或需要更快定位 cohesive module
+   的行为时，再增加 module test。
+4. 只有函数自身拥有有意义的行为合同、非平凡决策、重要边界/错误路径或安全不变量时，
+   才增加 function-level unit test。函数存在或改动行数少，本身都不是测试理由。
+5. 对纯展示或直白实现改动，使用直接 review、structural check 或已有上层行为检查，不创建
+   bespoke unit test。
+
+判断时，用户影响和失败成本高于代码行数，integration 与依赖风险高于局部实现细节；行为
+密度、分支、状态和边界条件越多，focused module/unit coverage 的价值越高。圈复杂度是提示
+信号，不是统一数字门槛。测试应能承受合理重构；主要锁定文案、private helper 形状或偶然
+实现细节的测试通常价值较低。
+
+典型选择：
+
+- 改名或少量文案：direct review 加相关 structural/publication check；不新增 unit test。
+- 一两行 trivial helper：若没有独立行为合同，由 enclosing module/workflow 覆盖；不因函数
+  单独存在而新增测试。
+- 复杂有状态模块：对状态转换、边界、错误路径和不变量做 focused module tests，并在可行时
+  保留一个上层行为 loop 验证 wiring。
+- 跨组件 workflow：优先 integration、Real CLI / Workflow 或适当的 Real API E2E；unit tests
+  不能替代跨边界证据。
+- Agent 行为变化：固定 scenario set、rubric、grader、threshold 和 runtime/model version 做
+  eval；若行为依赖认证、工具、filesystem、network 或用户可见交付，再配套真实或明确标注
+  的 mock workflow。eval 不能单独证明外部集成成功。
+
 ## 1. Unit / Module tests
 
-适用范围：函数、parser、状态转换，以及具有受控依赖的 cohesive module 或 CLI command。
+适用范围：拥有独立行为合同或非平凡逻辑的函数、parser、状态转换、安全不变量，以及具有
+受控依赖的 cohesive module 或 CLI command。它是按风险选择的工具，不是每次代码改动的
+默认要求。
 
 Proves：代表性输入和边界输入下的局部逻辑、模块内分支与错误路径符合预期。
 
 Does not prove：跨模块 wiring、真实 filesystem integration、外部依赖或完整用户 workflow。
+
+纯改名、copy edit、presentation metadata、简单配置展示、thin delegation、一两行直白逻辑，
+以及没有独立行为合同的低复杂度 helper，通常不写专用 unit test。通过直接检查、structural
+check 或相关 enclosing module/integration workflow 覆盖即可。不要为测试数量、覆盖率或固定
+圈复杂度阈值制造测试；但复杂或高失败成本逻辑仍应保留 focused coverage。
 
 ## 2. evals
 
@@ -23,6 +61,11 @@ output；应固定 dataset、rubric、grader、threshold 和运行版本。
 Proves：样本与 rubric 边界内的质量达到声明的 threshold，并可比较 regression。
 
 Does not prove：样本外泛化、在线依赖可用性、真实用户体验或完整业务 workflow。
+
+当 Agent 声明涉及 authentication、外部工具、filesystem state、network service 或用户可见
+交付时，应把 eval 与适用的 Real CLI / Workflow 或 Real API E2E 配对；真实依赖不可行时，
+使用明确标注的 Mock E2E。确定性的 parser、schema 和 safety logic 仍可使用 focused module
+tests。
 
 ## 3. structural checks
 

@@ -108,6 +108,34 @@ least one row, use every selected row at most once, and fill every cell with
 meaningful content. The table must contain exactly one Markdown separator row
 and tables inside fenced code blocks do not satisfy the contract.
 
+Choose outside-in from the acceptance behavior a user or external consumer can
+observe. Prefer the deepest feasible loop that exercises that behavior and its
+meaningful dependencies: an Agent eval, Real API E2E, Real CLI / Workflow, or a
+cross-component integration / Mock E2E boundary when a real dependency is
+unsafe, unavailable, costly, or nondeterministic. Add cohesive module tests when
+they make behavior faster to diagnose or economically cover meaningful
+branching, state transitions, boundaries, error paths, safety invariants, or
+logic with meaningful regression cost. Add function-level unit tests only when
+the function owns such a behavioral contract.
+
+Renames, copy edits, presentation metadata, simple configuration display, thin
+delegation, one- or two-line obvious logic, and low-complexity helpers without
+an independent behavioral contract normally need no dedicated unit test. Use
+direct inspection, a structural check, or an enclosing module/integration
+workflow when relevant. Cyclomatic complexity is one signal, not a mandatory
+numeric cutoff; also weigh user impact, behavioral density, dependency
+boundaries, failure cost, and whether a test would lock implementation rather
+than behavior. The validation rationale should explain the selected loops and
+residual risk, but need not justify every omitted trivial unit test separately.
+
+For prompt, routing, tool-use, retrieval, or generation-quality changes, select
+a reproducible eval with a fixed scenario set, rubric, grader, threshold, and
+recorded runtime/model version. When authentication, external tools, filesystem
+state, network services, or user-visible delivery are part of the claim, pair
+the eval with the applicable Real CLI / Workflow or Real API E2E evidence; an
+eval alone does not prove external integration. Deterministic parser, schema,
+or safety logic around an Agent may still justify focused module tests.
+
 `Evidence / Demo` is not a feedback loop or test layer. Record reproducible
 evidence and recorded demos under `Evidence Plan`; they do not upgrade the
 underlying validation depth.
