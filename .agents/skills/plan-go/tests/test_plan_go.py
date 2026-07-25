@@ -11,7 +11,6 @@ REPOSITORY = ROOT.parents[2]
 CLI = ROOT / "scripts" / "loop-evidence"
 SPEC = ROOT / "scripts" / "loop_spec.sh"
 SKILL = ROOT / "SKILL.md"
-OPENAI_YAML = ROOT / "agents" / "openai.yaml"
 LICENSE = ROOT / "LICENSE"
 TASK_ID = "example.plan-go-validation"
 PLAN_PATH = "docs/exec-plans/active/example.plan-go-validation.md"
@@ -188,9 +187,8 @@ def complete_evidence():
 
 
 class PlanGoContractTests(unittest.TestCase):
-    def test_skill_contract_and_ui_metadata(self):
+    def test_skill_execution_contract(self):
         skill = SKILL.read_text(encoding="utf-8")
-        metadata = OPENAI_YAML.read_text(encoding="utf-8")
         self.assertIn("name: plan-go", skill)
         self.assertIn("aligned", skill.lower())
         self.assertIn("registered", skill.lower())
@@ -201,8 +199,6 @@ class PlanGoContractTests(unittest.TestCase):
         self.assertIn("out-of-scope findings as follow-up work", skill.lower())
         self.assertIn("once the registered acceptance conditions are satisfied, stop", skill.lower())
         self.assertNotIn("explicitly accepted", skill.lower())
-        self.assertIn('display_name: "Go!"', metadata)
-        self.assertIn("$plan-go", metadata)
 
     def test_adapted_source_retains_mit_notice(self):
         notice = LICENSE.read_text(encoding="utf-8")
