@@ -201,7 +201,11 @@ class PlanGoContractTests(unittest.TestCase):
         self.assertIn("out-of-scope findings as follow-up work", skill.lower())
         self.assertIn("once the registered acceptance conditions are satisfied, stop", skill.lower())
         self.assertNotIn("explicitly accepted", skill.lower())
-        self.assertIn('display_name: "Go!"', metadata)
+        self.assertIn("# plan-go", skill)
+        self.assertIn('display_name: "plan-go"', metadata)
+        self.assertNotIn("Go!", skill)
+        self.assertNotIn("Go!", metadata)
+        self.assertNotIn("Go!", SPEC.read_text(encoding="utf-8"))
         self.assertIn("$plan-go", metadata)
 
     def test_adapted_source_retains_mit_notice(self):

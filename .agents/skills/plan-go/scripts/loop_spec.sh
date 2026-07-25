@@ -16,7 +16,7 @@ if ! [[ "$rounds" =~ ^[1-9][0-9]*$ ]]; then
 fi
 
 cat <<EOF
-# Go! Execution Spec
+# plan-go Execution Spec
 
 ## Objective
 $goal

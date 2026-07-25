@@ -3,7 +3,7 @@ name: plan-go
 description: "Execute a registered aligned task plan through an independent executor/evaluator feedback loop and finish with reproducible evidence."
 ---
 
-# Go!
+# plan-go
 
 ## Overview
 
