@@ -42,7 +42,9 @@
 ## 验证与证据
 
 - 改代码前先读相关测试，改后运行最小但有效的目标仓库验证。
-- 根据改动范围选择 smallest effective feedback loop：按需执行 Unit / Module tests、evals、structural checks、Mock E2E、Real CLI / Workflow 或 Real API E2E。
+- 从用户或外部消费者可观察的验收行为开始，优先选择能覆盖该行为及其关键依赖的最深可行 feedback loop：按需使用 evals、Real API E2E、Real CLI / Workflow、跨组件 integration 或 Mock E2E，而不是默认从函数级 unit test 开始。
+- 仅在 cohesive module、非平凡分支或状态转换、边界与错误路径、安全不变量或高回归成本逻辑需要快速诊断时增加 Unit / Module tests。纯改名、少量文案、展示元数据、简单配置展示、薄委托、一两行直白逻辑，以及没有独立行为合同的低复杂度 helper，默认不新增专用 unit test；使用直接检查、structural check 或已有上层 workflow 覆盖。
+- 圈复杂度只是测试投入信号之一，不是机械阈值；同时考虑用户影响、行为密度、依赖边界、失败成本，以及测试是否主要锁定私有实现。Agent 行为变化优先使用固定场景、rubric、grader、threshold 和版本可复现的 eval；若声明涉及认证、外部工具、文件系统、网络服务或用户可见交付，再配套相应 Real CLI / Workflow 或 Real API E2E。
 - 为实际运行的 feedback loop 保留 reproducible evidence 或 recorded demos；Evidence / Demo 是证据载体，不是测试层，也不会提升底层验证深度。
 - mock、synthetic、local CLI 和真实后端结果必须准确标注。
 - 真实 HTTP/CLI/workflow 或外部服务集成测试入口应提交到目标仓库并默认 skip，避免 CI 默认请求真实依赖。
