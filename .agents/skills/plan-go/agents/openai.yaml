@@ -1,4 +1,4 @@
 interface:
-  display_name: "plan-go"
-  short_description: "按 aligned plan 执行 executor/evaluator 闭环并留证"
-  default_prompt: "Use $plan-go to execute the registered aligned plan through an independent executor/evaluator fix loop and finish with reproducible evidence."
+  display_name: "Plan Go"
+  short_description: "按已对齐计划执行，通过独立实现、评估与修复闭环留下可复现证据"
+  default_prompt: "使用 $plan-go 执行已登记且已对齐的任务计划，通过独立实现与评估的修复闭环完成验收并留下可复现证据。"
