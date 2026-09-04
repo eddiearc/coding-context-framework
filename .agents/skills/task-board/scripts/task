@@ -665,6 +665,29 @@ def cmd_set_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_set_title(args: argparse.Namespace) -> int:
+    board, yaml, tasks, _statuses = checked_board(args.board)
+    task = find_task(tasks, args.task_id)
+    title = args.title.strip()
+    if not title:
+        raise TaskError("title must be non-empty")
+    old_title = task.get("title")
+    if old_title == title:
+        print(f"unchanged: {task['id']} title already matches")
+        return 0
+    now = utc_now()
+    task["title"] = title
+    task["updated_at"] = now
+    board["updated_at"] = now
+    _tasks, _statuses, errors = validate_board(board)
+    if errors:
+        task["title"] = old_title
+        raise TaskError("title change would make board invalid:\n" + "\n".join(f"- {error}" for error in errors))
+    write_board(args.board, board, yaml)
+    print(f"updated: {task['id']} title")
+    return 0
+
+
 def cmd_set_plan_metadata(args: argparse.Namespace) -> int:
     board, yaml, tasks, statuses = checked_board(args.board)
     task = find_task(tasks, args.task_id)
@@ -874,6 +897,28 @@ def cmd_add_note(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_remove_note(args: argparse.Namespace) -> int:
+    board, yaml, tasks, _statuses = checked_board(args.board)
+    task = find_task(tasks, args.task_id)
+    notes = task.setdefault("notes", [])
+    if args.note not in notes:
+        print(f"unchanged: {task['id']} does not have this note")
+        return 0
+    notes.remove(args.note)
+    now = utc_now()
+    task["updated_at"] = now
+    board["updated_at"] = now
+    _tasks, _statuses, errors = validate_board(board)
+    if errors:
+        raise TaskError(
+            "note removal would make board invalid:\n"
+            + "\n".join(f"- {error}" for error in errors)
+        )
+    write_board(args.board, board, yaml)
+    print(f"updated: {task['id']} notes -= 1")
+    return 0
+
+
 def cmd_link_sub_task(args: argparse.Namespace) -> int:
     board, yaml, tasks, _statuses = checked_board(args.board)
     parent = find_task(tasks, args.parent_task_id)
@@ -1069,6 +1114,12 @@ def build_parser() -> argparse.ArgumentParser:
     set_status.add_argument("status")
     set_status.set_defaults(func=cmd_set_status)
 
+    set_title = subparsers.add_parser("set-title", help="Rename a task title.")
+    add_board_arg(set_title)
+    set_title.add_argument("task_id")
+    set_title.add_argument("title")
+    set_title.set_defaults(func=cmd_set_title)
+
     set_plan_metadata = subparsers.add_parser(
         "set-plan-metadata",
         help="Refresh an existing plan link/status and atomically update its execution routing.",
@@ -1148,6 +1199,12 @@ def build_parser() -> argparse.ArgumentParser:
     add_note.add_argument("task_id")
     add_note.add_argument("note")
     add_note.set_defaults(func=cmd_add_note)
+
+    remove_note = subparsers.add_parser("remove-note", help="Remove an exact note from a task.")
+    add_board_arg(remove_note)
+    remove_note.add_argument("task_id")
+    remove_note.add_argument("note")
+    remove_note.set_defaults(func=cmd_remove_note)
 
     link_sub_task = subparsers.add_parser(
         "link-sub-task", help="Link an existing task as a child of another task."

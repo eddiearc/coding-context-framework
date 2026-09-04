@@ -28,10 +28,12 @@ scripts/task validate
 scripts/task list [--status STATUS] [--format table|yaml|json] [--tree]
 scripts/task show TASK_ID [--format yaml|json]
 scripts/task add-task --id ID --title TITLE --domain DOMAIN [options]
+scripts/task set-title TASK_ID TITLE
 scripts/task register-plan PLAN --id ID --domain DOMAIN --repo REPO [options]
 scripts/task set-status TASK_ID STATUS
 scripts/task set-plan-metadata TASK_ID PLAN [routing options]
 scripts/task add-note TASK_ID NOTE
+scripts/task remove-note TASK_ID NOTE
 scripts/task add-evidence TASK_ID --type TYPE --status STATUS --summary TEXT [--path PATH]
 scripts/task link-sub-task PARENT_TASK_ID CHILD_TASK_ID
 scripts/task unlink-sub-task PARENT_TASK_ID CHILD_TASK_ID
