@@ -202,7 +202,19 @@ class TaskCliTest(unittest.TestCase):
                 "add-note", "example.release", "Synthetic review note."
             )
             self.assertEqual(result, 0, stderr)
-        self.assertEqual(self.task("example.release")["notes"], ["Synthetic review note."])
+            self.assertEqual(self.task("example.release")["notes"], ["Synthetic review note."])
+
+        for _ in range(2):
+            result, _stdout, stderr = self.run_cli(
+                "remove-note", "example.release", "Synthetic review note."
+            )
+            self.assertEqual(result, 0, stderr)
+        self.assertEqual(self.task("example.release")["notes"], [])
+
+        result, _stdout, stderr = self.run_cli(
+            "add-note", "example.release", "Synthetic review note."
+        )
+        self.assertEqual(result, 0, stderr)
 
         evidence_args = (
             "add-evidence",
@@ -230,6 +242,25 @@ class TaskCliTest(unittest.TestCase):
         self.assertEqual(result, 0, stderr)
         self.assertEqual(self.task("example.release")["status"], "done")
 
+    def test_set_title_is_validated_and_idempotent(self) -> None:
+        self.add_task("example.rename")
+        result, _stdout, stderr = self.run_cli(
+            "set-title", "example.rename", "Renamed task"
+        )
+        self.assertEqual(result, 0, stderr)
+        self.assertEqual(self.task("example.rename")["title"], "Renamed task")
+
+        result, stdout, stderr = self.run_cli(
+            "set-title", "example.rename", "Renamed task"
+        )
+        self.assertEqual(result, 0, stderr)
+        self.assertIn("unchanged", stdout)
+
+        result, _stdout, stderr = self.run_cli("set-title", "example.rename", "   ")
+        self.assertEqual(result, 1)
+        self.assertIn("non-empty", stderr)
+        self.assertEqual(self.task("example.rename")["title"], "Renamed task")
+
     def test_status_failure_and_blocked_intake_are_atomic(self) -> None:
         self.add_task("example.unplanned")
         before = self.board_path.read_bytes()
@@ -251,6 +282,20 @@ class TaskCliTest(unittest.TestCase):
         )
         self.assertEqual(result, 0, stderr)
         self.assertTrue(self.task("example.blocked")["notes"])
+
+    def test_remove_sole_blocker_note_is_rejected_without_writes(self) -> None:
+        self.add_task("example.blocked-note", status="blocked")
+        notes_before = list(self.task("example.blocked-note")["notes"])
+        self.assertEqual(len(notes_before), 1)
+        before = self.board_path.read_bytes()
+
+        result, _stdout, stderr = self.run_cli(
+            "remove-note", "example.blocked-note", notes_before[0]
+        )
+        self.assertEqual(result, 1)
+        self.assertIn("would make board invalid", stderr)
+        self.assertEqual(self.board_path.read_bytes(), before)
+        self.assertEqual(self.task("example.blocked-note")["notes"], notes_before)
 
     def test_register_plan_creates_and_attaches_with_strict_pairing(self) -> None:
         aligned = self.make_plan("register.md", title="Checkout registration")

@@ -26,9 +26,9 @@ $goal
 - Confirm the plan is Aligned and execution is allowed.
 - Treat that registered aligned plan as the goal source and implementation facts as owned by the target repository.
 - If the gate fails, route to task-plan or stop for alignment before substantive work.
-- Record goal tooling as an object with a non-empty runtime, `used=true`, and `mechanism=task-board-plan` when the registered task/plan is the goal.
-- Use `mechanism=native-goal+task-board-plan` only when a native runtime goal mirrors that registered task/plan.
-- Keep `task_id` as the auditable registered goal identifier; the runtime name does not imply native goal usage.
+- Record goal tooling as an object with a non-empty runtime, 'used=true', and 'mechanism=task-board-plan' when the registered task/plan is the goal.
+- Use 'mechanism=native-goal+task-board-plan' only when a native runtime goal mirrors that registered task/plan.
+- Keep 'task_id' as the auditable registered goal identifier; the runtime name does not imply native goal usage.
 - Reject chat-only, verbal, or arbitrary goal-mechanism claims.
 
 ## Acceptance Checks
@@ -42,7 +42,7 @@ $goal
 ## Role Independence Policy
 - Main orchestrates and integrates: confirm the goal, hand off prompts, integrate accepted output, run mechanical checks, record evidence, and choose routes.
 - Executor produces the smallest sufficient change and reports artifacts, commands/results, validation entry points, and uncertainties.
-- Executor artifacts must identify either a safe existing repository-relative `local_path` or an HTTP(S) `external_url`; bare strings are not evidence.
+- Executor artifacts must identify either a safe existing repository-relative 'local_path' or an HTTP(S) 'external_url'; bare strings are not evidence.
 - Evaluator pressure-tests the result against the original goal and reports categorized findings with evidence.
 - Main must not claim executor or evaluator output as its own.
 - If independent agent tools are available, use separate executor and evaluator agents. Main-thread implementation plus self-review is not a complete adversarial loop.

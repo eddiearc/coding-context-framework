@@ -32,6 +32,9 @@ files=(
   scripts/task
   tasks/board.yaml
   tasks/task.schema.json
+  tests/__init__.py
+  tests/helpers.py
+  tests/test_claude_compat.py
   .agents/skills/task-board/SKILL.md
   .agents/skills/task-board/scripts/task
   .agents/skills/task-plan/SKILL.md

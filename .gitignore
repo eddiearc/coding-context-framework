@@ -13,6 +13,7 @@ tmp/
 *.swp
 
 # Local-only material must not be published.
+.playwright-mcp/
 .env
 .env.*
 !.env.example

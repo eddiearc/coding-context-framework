@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -26,6 +27,9 @@ class InitTests(unittest.TestCase):
                 "scripts/task",
                 "tasks/board.yaml",
                 "tasks/task.schema.json",
+                "tests/__init__.py",
+                "tests/helpers.py",
+                "tests/test_claude_compat.py",
                 ".agents/skills/task-board/SKILL.md",
                 ".agents/skills/task-plan/SKILL.md",
                 ".agents/skills/plan-go/SKILL.md",
@@ -64,6 +68,16 @@ class InitTests(unittest.TestCase):
 
             validation = run(destination / "scripts/task", "validate", cwd=destination)
             self.assertEqual(0, validation.returncode, validation.stderr)
+
+            compatibility = run(
+                sys.executable,
+                "-m",
+                "unittest",
+                "tests.test_claude_compat",
+                "-v",
+                cwd=destination,
+            )
+            self.assertEqual(0, compatibility.returncode, compatibility.stderr)
 
     def test_repeated_initialization_is_idempotent(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
