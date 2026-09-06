@@ -12,7 +12,9 @@ tasks/task.schema.json             board 数据合同
 scripts/task                       稳定 CLI 入口
 .agents/skills/task-board/         board 行为、实现和测试
 .agents/skills/task-plan/          plan 格式、检查器和测试
+.agents/skills/herdr-workflow/     可选 Herdr 交接 skill 与 Markdown 场景 rubric
 .claude/skills/<name>              指向 canonical .agents skill 的 Claude 入口
+docs/agent-routing.md              用户自填的 agent/model 路由 TODO
 docs/domains/                      domain 抽象与模板
 docs/exec-plans/                   active/completed 决策记录
 docs/design-docs/                  验证词汇
@@ -40,4 +42,4 @@ docs/generated/evidence/templates/ evidence 模板
 
 ## 非目标
 
-当前版本不提供 Web UI、数据库、托管同步、多写入者协调服务、telemetry、业务仓库迁移或 runtime 专用 adapter。原子写入避免半写文件，但调用方仍需自行串行化并发 mutation。
+当前版本不提供 Web UI、数据库、托管同步、多写入者协调服务、telemetry、业务仓库迁移或 runtime 专用 adapter。可选的 Herdr workflow 只提供 skill、用户路由模板和 Markdown 场景 rubric，不增加调度器、routing parser 或 automated grader。原子写入避免半写文件，但调用方仍需自行串行化并发 mutation。

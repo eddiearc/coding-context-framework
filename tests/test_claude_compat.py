@@ -11,7 +11,7 @@ class ClaudeCompatibilityTests(unittest.TestCase):
         self.assertEqual("@AGENTS.md\n", (REPOSITORY / "CLAUDE.md").read_text())
 
     def test_project_skills_link_to_canonical_agent_skills(self) -> None:
-        for name in ("task-board", "task-plan", "plan-go"):
+        for name in ("task-board", "task-plan", "plan-go", "herdr-workflow"):
             with self.subTest(name=name):
                 link = REPOSITORY / ".claude/skills" / name
                 canonical = REPOSITORY / ".agents/skills" / name

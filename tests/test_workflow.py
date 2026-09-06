@@ -1,11 +1,21 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
 
 from tests.helpers import REPOSITORY, run
+
+HERDR_SCENARIO_HEADINGS = (
+    "### 1. missing-routing",
+    "### 2. explicit-selection",
+    "### 3. outside-herdr",
+    "### 4. same-task-writer-isolation",
+    "### 5. ambiguous-recovery",
+    "### 6. independent-evaluator-evidence",
+)
 
 
 def aligned_plan() -> str:
@@ -187,6 +197,38 @@ class LocalWorkflowTests(unittest.TestCase):
             self.assertEqual("review", task["status"])
             self.assertEqual("aligned", task["plan"]["status"])
             self.assertEqual(1, len(task["evidence"]))
+
+    def test_initialized_workspace_installs_optional_herdr_workflow(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory) / "coding context"
+            initialized = run(REPOSITORY / "init.sh", "--target", workspace)
+            self.assertEqual(0, initialized.returncode, initialized.stderr)
+
+            skill = workspace / ".agents/skills/herdr-workflow/SKILL.md"
+            routing = workspace / "docs/agent-routing.md"
+            rubric = workspace / ".agents/skills/herdr-workflow/references/evaluation.md"
+            self.assertTrue(skill.is_file())
+            self.assertTrue(routing.is_file())
+            self.assertTrue(rubric.is_file())
+            self.assertFalse(
+                (workspace / ".agents/skills/herdr-workflow/scripts").exists()
+            )
+            self.assertFalse(
+                (workspace / ".agents/skills/herdr-workflow/evals").exists()
+            )
+
+            rubric_text = rubric.read_text(encoding="utf-8")
+            for heading in HERDR_SCENARIO_HEADINGS:
+                with self.subTest(heading=heading):
+                    self.assertIn(heading, rubric_text)
+            self.assertIn("Threshold: all six scenarios must pass.", rubric_text)
+
+            link = workspace / ".claude/skills/herdr-workflow"
+            self.assertTrue(link.is_symlink())
+            self.assertEqual(
+                "../../.agents/skills/herdr-workflow",
+                os.readlink(link),
+            )
 
 
 if __name__ == "__main__":

@@ -39,6 +39,19 @@
 - 复用 `Goal / Scope` 中的 `In scope`、`Out of scope` 和既有完成条件控制交付边界，不为此增加新的必填字段。边界外发现默认记录为 follow-up；只有直接阻止本次交付，或存在安全、数据损坏风险时才扩大范围，并明确记录原因。
 - 具体实现必须在目标业务仓库的独立 git worktree 中完成（每 session / 每任务一个），不共享主 checkout 的工作区与 HEAD；主 checkout 只用于同步 main 与只读查阅。
 
+## Optional Herdr workflow
+
+- Herdr 是可选集成。未安装或不在 Herdr pane 内时，task/plan 核心流程保持可用。
+- 使用 Herdr 前先读 `.agents/skills/herdr-workflow/SKILL.md` 与 `docs/agent-routing.md`。固定六场景 rubric 见 `.agents/skills/herdr-workflow/references/evaluation.md`。
+- 命令语法以已安装的 `herdr --skill` 与 CLI help 为准；不要为了探路运行无参数的 `herdr`。
+- 任何 live inspect 或 control 之前先确认 `HERDR_ENV=1`。否则只报告前置条件，不检查或控制任何 Herdr session。
+- Agent kind 与 model 必须在启动前由用户在 routing 或当前 session 中明确选择；model 也可以是用户明确指定的 CLI default。未填写的 `TODO` 不能当成静默默认模型。框架不指定必选模型，也不默认 yolo。
+- 实现交接前必须已有已登记且 aligned 的 plan。等待必须带 timeout；只清理本 handoff 创建的 pane，且放在证据落盘之后。
+- 规划按任务复杂度比例进行，不强制规划模型或规划步骤。
+- 同一 task 留在调用方 tab，用 pane split；每个 writer 使用独立目标仓 worktree。
+- `idle` / `done` 只表示传输生命周期，不是 task 验收；`unknown` / timeout 不能证明完成，也不能作为重复启动的理由。
+- 独立 evaluator 必须是另一个 agent；可以使用与 executor 相同的 model。
+
 ## 验证与证据
 
 - 改代码前先读相关测试，改后运行最小但有效的目标仓库验证。

@@ -38,6 +38,9 @@ class InitTests(unittest.TestCase):
                 ".agents/skills/plan-go/scripts/loop-evidence",
                 ".agents/skills/plan-go/scripts/loop_evidence.py",
                 ".agents/skills/plan-go/scripts/loop_spec.sh",
+                ".agents/skills/herdr-workflow/SKILL.md",
+                ".agents/skills/herdr-workflow/references/evaluation.md",
+                "docs/agent-routing.md",
                 "docs/design-docs/layered-testing-practice.md",
                 "docs/exec-plans/_template.md",
                 "docs/generated/evidence/templates/validation-report.md",
@@ -46,7 +49,7 @@ class InitTests(unittest.TestCase):
                     self.assertTrue((destination / relative).is_file())
 
             self.assertEqual("@AGENTS.md\n", (destination / "CLAUDE.md").read_text())
-            for name in ("task-board", "task-plan", "plan-go"):
+            for name in ("task-board", "task-plan", "plan-go", "herdr-workflow"):
                 with self.subTest(claude_skill=name):
                     link = destination / ".claude/skills" / name
                     self.assertTrue(link.is_symlink())
@@ -98,7 +101,7 @@ class InitTests(unittest.TestCase):
                 if path.is_file()
             }
             self.assertEqual(before, after)
-            for name in ("task-board", "task-plan", "plan-go"):
+            for name in ("task-board", "task-plan", "plan-go", "herdr-workflow"):
                 self.assertEqual(
                     f"../../.agents/skills/{name}",
                     os.readlink(destination / ".claude/skills" / name),
@@ -118,6 +121,22 @@ class InitTests(unittest.TestCase):
             self.assertNotEqual(0, second.returncode)
             self.assertEqual(marker, protected.read_text())
             self.assertIn("AGENTS.md", second.stderr + second.stdout)
+
+    def test_does_not_overwrite_edited_agent_routing(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / "project"
+            destination.mkdir()
+            first = self.initialize(destination)
+            self.assertEqual(0, first.returncode, first.stderr)
+            routing = destination / "docs/agent-routing.md"
+            marker = "synthetic local routing customization\n"
+            routing.write_text(marker)
+
+            second = self.initialize(destination)
+
+            self.assertNotEqual(0, second.returncode)
+            self.assertEqual(marker, routing.read_text())
+            self.assertIn("docs/agent-routing.md", second.stderr + second.stdout)
 
     def test_does_not_overwrite_a_conflicting_claude_skill_entry(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -145,7 +164,7 @@ class InitTests(unittest.TestCase):
             self.assertFalse((destination / "CLAUDE.md").is_symlink())
             self.assertEqual("@AGENTS.md\n", (destination / "CLAUDE.md").read_text())
             self.assertFalse((destination / ".claude/skills").is_symlink())
-            for name in ("task-board", "task-plan", "plan-go"):
+            for name in ("task-board", "task-plan", "plan-go", "herdr-workflow"):
                 self.assertEqual(
                     f"../../.agents/skills/{name}",
                     os.readlink(destination / ".claude/skills" / name),
