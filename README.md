@@ -13,6 +13,7 @@ Coding Context Framework v0.1.0 是一个通用、Git-backed、repository-native
 - Reproducible evidence 与 recorded demos 用于审阅实际运行结果；Evidence / Demo 不是测试层。
 - 初始化、上下文检查、发布安全检查、secret scan 和 CI。
 - Codex 与 Claude Code 共享同一份 `AGENTS.md` 和 `.agents/skills` canonical source。
+- 可选 Herdr 交接 skill 与用户自填的 `docs/agent-routing.md`；未安装 Herdr 时不影响 task/plan。
 - Domain、plan 和 evidence 模板；不附带任何真实或教程任务内容。
 
 ## 快速开始
@@ -64,7 +65,9 @@ scripts/task                       稳定 CLI 入口
 .agents/skills/task-board/         task board 实现与测试
 .agents/skills/task-plan/          plan 结构与检查器
 .agents/skills/plan-go/            plan 执行与 executor/evaluator 闭环
+.agents/skills/herdr-workflow/     可选 Herdr 交接与 Markdown 场景 rubric
 .claude/skills/                    Claude project skill 相对软链接
+docs/agent-routing.md              用户自填的 agent/model 路由 TODO
 docs/domains/                      domain 模板
 docs/exec-plans/                   active/completed 计划目录
 docs/generated/evidence/           evidence 模板
@@ -77,6 +80,11 @@ scripts/check-all.sh --skip-secrets
 ```
 
 如果本机已安装 Gitleaks v8.24.2，去掉 `--skip-secrets`。CI 会安装固定版本并运行完整检查。
+
+可选 Herdr 六场景 rubric 见
+[evaluation.md](.agents/skills/herdr-workflow/references/evaluation.md)。
+Parent 记录 response；独立 grader 按 all-pass 评判。Live Herdr 步骤仅手工 opt-in，
+且必须先确认 `HERDR_ENV=1`。
 
 ## 初始化另一个工作区
 

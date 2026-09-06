@@ -45,6 +45,8 @@ files=(
   .agents/skills/plan-go/scripts/loop-evidence
   .agents/skills/plan-go/scripts/loop_evidence.py
   .agents/skills/plan-go/scripts/loop_spec.sh
+  .agents/skills/herdr-workflow/SKILL.md
+  .agents/skills/herdr-workflow/references/evaluation.md
   docs/domains/index.md
   docs/domains/general.md
   docs/design-docs/layered-testing-practice.md
@@ -52,9 +54,10 @@ files=(
   docs/generated/evidence/templates/evidence-manifest.yaml
   docs/generated/evidence/templates/integration-cases.md
   docs/generated/evidence/templates/validation-report.md
+  docs/agent-routing.md
 )
 
-claude_skills=(task-board task-plan plan-go)
+claude_skills=(task-board task-plan plan-go herdr-workflow)
 
 for relative in "${files[@]}"; do
   source_file="$SOURCE_ROOT/$relative"

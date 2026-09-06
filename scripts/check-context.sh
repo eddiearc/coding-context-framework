@@ -34,10 +34,13 @@ required=(
   .agents/skills/plan-go/scripts/loop-evidence
   .agents/skills/plan-go/scripts/loop_evidence.py
   .agents/skills/plan-go/scripts/loop_spec.sh
+  .agents/skills/herdr-workflow/SKILL.md
+  .agents/skills/herdr-workflow/references/evaluation.md
   docs/domains/index.md
   docs/domains/general.md
   docs/design-docs/layered-testing-practice.md
   docs/generated/evidence/templates/validation-report.md
+  docs/agent-routing.md
 )
 
 for relative in "${required[@]}"; do
@@ -52,7 +55,7 @@ if [[ "$(tr -d '[:space:]' < "$ROOT/CLAUDE.md")" != "@AGENTS.md" ]]; then
   exit 1
 fi
 
-for name in task-board task-plan plan-go; do
+for name in task-board task-plan plan-go herdr-workflow; do
   link="$ROOT/.claude/skills/$name"
   expected="../../.agents/skills/$name"
   if [[ ! -L "$link" || "$(readlink "$link")" != "$expected" ]]; then
