@@ -41,16 +41,15 @@
 
 ## Optional Herdr workflow
 
-- Herdr 是可选集成。未安装或不在 Herdr pane 内时，task/plan 核心流程保持可用。
-- 使用 Herdr 前先读 `.agents/skills/herdr-workflow/SKILL.md` 与 `docs/agent-routing.md`。固定六场景 rubric 见 `.agents/skills/herdr-workflow/references/evaluation.md`。
-- 命令语法以已安装的 `herdr --skill` 与 CLI help 为准；不要为了探路运行无参数的 `herdr`。
-- 任何 live inspect 或 control 之前先确认 `HERDR_ENV=1`。否则只报告前置条件，不检查或控制任何 Herdr session。
-- Agent kind 与 model 必须在启动前由用户在 routing 或当前 session 中明确选择；model 也可以是用户明确指定的 CLI default。未填写的 `TODO` 不能当成静默默认模型。框架不指定必选模型，也不默认 yolo。
-- 实现交接前必须已有已登记且 aligned 的 plan。等待必须带 timeout；只清理本 handoff 创建的 pane，且放在证据落盘之后。
-- 规划按任务复杂度比例进行，不强制规划模型或规划步骤。
-- 同一 task 留在调用方 tab，用 pane split；每个 writer 使用独立目标仓 worktree。
-- `idle` / `done` 只表示传输生命周期，不是 task 验收；`unknown` / timeout 不能证明完成，也不能作为重复启动的理由。
-- 独立 evaluator 必须是另一个 agent；可以使用与 executor 相同的 model。
+- Herdr 是可选集成。调用方 pane 有效且 `HERDR_ENV=1` 时，有用的并行或独立工作优先用 Herdr 交接，而不是当前进程内的隐藏委派。Herdr 不可用时，task/plan 核心流程继续。操作、恢复和持久 session fallback 见 `.agents/skills/herdr-workflow/SKILL.md`；路由见 `docs/agent-routing.md`；固定六场景 rubric 见 `.agents/skills/herdr-workflow/references/evaluation.md`。
+- 命令语法以已安装的 `herdr --skill` 与 CLI help 为准；不要为了探路运行无参数的 `herdr`。任何 live inspect 或 control 之前先确认 `HERDR_ENV=1`；否则不检查、不控制任何 Herdr session。调用方身份缺失或过期时，不拆无关 pane，也不编造调用方。
+- kind、model、approval、`quota_check` 和 fallback 只用 routing 或当前 session 已经明确的值；已授权的本次路由直接沿用。model 可以是用户明确指定的 CLI default。未填写的 `TODO` 不能当成静默默认。框架不指定必选模型或 provider，也不默认 yolo 或其他 approval 模式。
+- 按 `docs/agent-routing.md` 执行已配置的额度检查，区分额度耗尽与计量不可用；只用已配置的 fallback，不静默更换 review model。
+- 默认由当前 agent 写 plan。只有复杂度或所需专长值得，并且已配置的规划路线有用时，才另做 planner 交接。
+- 先确定尚未稳定的共享合同，再并发执行输入已就绪、写范围分离的切片。已确定的共享合同不要求串行；写冲突、未完成的依赖和很小的连贯改动保持串行。每个角色写明范围、输入、期望输出和验证；每个 writer 使用独立目标仓库 worktree，agent cwd 保持协调仓库根。同一 task 留在调用方 tab；agent 与普通命令 pane 都有可读名称。布局尽量平铺，必要时分批，保持 pane 可读。
+- 实现交接前必须已有已登记且 aligned 的 plan。等待必须有界。`idle` / `done` 只表示传输生命周期，不是 task 验收；`unknown` 或 timeout 不能证明完成，也不能作为重复启动的理由。
+- Herdr 不能托管这次长时间外部 agent 时，使用本任务拥有的持久 session（tmux，或当前 session 已经指定的等价工具）。记录 cwd、启动命令、名称和日志位置。不接管、不结束无关 session。证据落盘后只清理这次交接创建的 session。
+- 独立 evaluator 必须是另一个 agent，可以与 executor 使用相同 model。新增层怎么对照，写在下方 PR 说明里。
 
 ## 验证与证据
 
@@ -62,6 +61,15 @@
 - mock、synthetic、local CLI 和真实后端结果必须准确标注。
 - 真实 HTTP/CLI/workflow 或外部服务集成测试入口应提交到目标仓库并默认 skip，避免 CI 默认请求真实依赖。
 - 交付说明记录命令、环境、关键输入、实际结果、跳过原因和剩余风险。
+
+## PR 说明与评审
+
+- 创建或更新 PR 时，先写用户可观察的前后行为，再写核心职责和入口、为什么需要这些改动，以及接口、兼容性和运行时影响。小改动用几句话写清。
+- 写实际运行过的验证和剩余限制。核心实现、agent 行为和真实集成是分开的结论；没有运行的项保持未运行。
+- 大 diff 按生产代码、测试、评测设施与数据、生成代码、文档/配置分别计数。类别不重叠，数字来自该 PR 当前的 base/head。说明保留下来的安全或正确性代码为什么留在运行路径里。
+- 独立评审对新增层或机制做移除或更简单方案对照。测试通过不等于每一层都必要。
+- 拆到别的 PR 只改变评审怎么组织。当前范围说得清时，就在这个 PR 里写明用途。不为了缩小 diff 而扩大范围，也不把拆 PR 当成证明这些代码有必要的默认做法。
+- 用户要求改进 PR 正文时，更新实际正文并回读确认。
 
 ## 安全
 
